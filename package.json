@@ -1,0 +1,13 @@
+{
+  "name": "logindeck",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Isolated multi-user Salesforce browser sessions",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "playwright": "^1.56.0"
+  }
+}
