@@ -48,6 +48,7 @@
         "owner": "aman-dhakar-191",
         "repo": "LoginDeck"
       }
-    ]
+    ],
+    "artifactName": "${productName}-Setup-${version}.${ext}"
   }
 }
