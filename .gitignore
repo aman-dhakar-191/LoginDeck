@@ -2,6 +2,5 @@ node_modules/
 .env
 .env.*
 !.env.example
-playwright/.cache/
 .session-data/
 browser-data/
