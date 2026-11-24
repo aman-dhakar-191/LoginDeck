@@ -52,7 +52,7 @@
               <option value="personal">My existing Edge profile</option>
             </select>
           </label>
-          <label class="field full"><span>Salesforce URL</span><input id="salesforce-url" type="url" value="https://login.salesforce.com" placeholder="https://your-domain.my.salesforce.com" required></label>
+          <label class="field full"><span>Salesforce URL · editable</span><input id="salesforce-url" type="url" list="salesforce-url-presets" value="https://login.salesforce.com" placeholder="https://your-domain.my.salesforce.com" autocomplete="url" spellcheck="false" required><datalist id="salesforce-url-presets"><option value="https://login.salesforce.com">Production login</option><option value="https://test.salesforce.com">Sandbox login</option></datalist></label>
         </div>
         <div id="profile-help" class="profile-help">A private browser profile is created for this session. Sign in once; LoginDeck keeps that session separate from your other profiles.</div>
         <div class="form-footer"><p>LoginDeck never reads or copies your saved passwords.</p><button class="primary-button" type="submit"><span>＋</span> Save session</button></div>

@@ -4,6 +4,7 @@ const { chromium } = require("playwright");
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const crypto = require("node:crypto");
+const { spawn } = require("node:child_process");
 
 let mainWindow;
 let updateCheckStarted = false;
@@ -85,7 +86,54 @@ ipcMain.handle("updater:install", async () => {
   autoUpdater.quitAndInstall();
 });
 
-ipcMain.handle("sessions:list", async () => readSavedSessions());
+async function inspectSessionStatus(session) {
+  const active = activeSessions.get(session.id);
+  if (!active) {
+    return {
+      status: session.profileMode === "personal" ? "external" : "closed",
+      label: session.profileMode === "personal" ? "Browser profile · status not connected" : "Not open"
+    };
+  }
+  try {
+    const state = await active.page.evaluate(async () => {
+      const current = location.href;
+      if (/\/login|login\.salesforce\.com|test\.salesforce\.com\/\?/.test(current)) {
+        return { authenticated: false };
+      }
+      const versionsResponse = await fetch("/services/data/", { credentials: "include" });
+      if (!versionsResponse.ok) return { authenticated: false };
+      const versions = await versionsResponse.json();
+      const version = versions.map(item => Number(item.version)).filter(Number.isFinite).sort((a, b) => b - a)[0];
+      if (!version) return { authenticated: false };
+      const response = await fetch("/services/data/v" + version.toFixed(1) + "/chatter/users/me", { credentials: "include" });
+      if (!response.ok) return { authenticated: false };
+      const user = await response.json();
+      return {
+        authenticated: true,
+        user: {
+          id: user.id || user.Id,
+          name: user.name || user.Name,
+          username: user.username || user.Username,
+          email: user.email || user.Email
+        }
+      };
+    });
+    if (state.authenticated && state.user?.username) {
+      return { status: "authenticated", label: "Signed in as " + (state.user.name || state.user.username), user: state.user };
+    }
+    return { status: "open", label: "Browser open · sign-in not detected" };
+  } catch {
+    return { status: "unknown", label: "Checking sign-in…" };
+  }
+}
+
+ipcMain.handle("sessions:list", async () => {
+  const sessions = await readSavedSessions();
+  return Promise.all(sessions.map(async session => ({
+    ...session,
+    connection: await inspectSessionStatus(session)
+  })));
+});
 
 ipcMain.handle("sessions:save", async (_event, input) => {
   const name = String(input?.name || "").trim().slice(0, 50);
@@ -95,9 +143,6 @@ ipcMain.handle("sessions:save", async (_event, input) => {
   if (!name) throw new Error("Give this session a name.");
   if (!validSalesforceUrl(url)) throw new Error("Enter a valid HTTPS Salesforce login or My Domain URL.");
   browserChannel(browser);
-  if (profileMode === "personal" && browser !== "edge") {
-    throw new Error("Personal profile mode currently supports Microsoft Edge only.");
-  }
 
   const items = await readSavedSessions();
   const id = input?.id || crypto.randomUUID();
@@ -129,14 +174,33 @@ ipcMain.handle("sessions:launch", async (_event, id) => {
   const session = items.find(item => item.id === id);
   if (!session) throw new Error("Session configuration not found.");
 
-  // Personal mode delegates to Edge itself. Edge reuses its normal profile,
-  // cookies and password manager; LoginDeck never reads or copies credentials.
+  // Personal mode launches the selected installed browser without a custom
+  // user-data-dir, so Chromium reuses that user's normal profile and sign-in.
+  // LoginDeck never reads or copies cookies or saved passwords.
   if (session.profileMode === "personal") {
     if (process.platform !== "win32") {
-      throw new Error("Personal Edge mode is currently supported on Windows only.");
+      throw new Error("Using an existing browser profile is currently supported on Windows only.");
     }
-    await shell.openExternal(`microsoft-edge:${session.url}`);
-    return { id, status: "opened-personal" };
+    const roots = [
+      process.env.LOCALAPPDATA,
+      process.env.PROGRAMFILES,
+      process.env["PROGRAMFILES(X86)"]
+    ].filter(Boolean);
+    const relative = session.browser === "chrome"
+      ? ["Google/Chrome/Application/chrome.exe"]
+      : ["Microsoft/Edge/Application/msedge.exe"];
+    const candidates = roots.flatMap(root => relative.map(item => path.join(root, item)));
+    let executable = null;
+    for (const candidate of candidates) {
+      try { await fs.access(candidate); executable = candidate; break; } catch {}
+    }
+    if (!executable) {
+      throw new Error(`${session.browser === "edge" ? "Microsoft Edge" : "Google Chrome"} was not found. Install it, then try again.`);
+    }
+    const child = spawn(executable, [session.url], { detached: true, stdio: "ignore", windowsHide: true });
+    child.on("error", error => console.error("Could not open personal browser profile:", error));
+    child.unref();
+    return { id, status: session.browser === "edge" ? "opened-personal-edge" : "opened-personal-chrome" };
   }
 
   if (activeSessions.has(id)) {

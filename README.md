@@ -30,12 +30,12 @@ The extension uses the currently signed-in Salesforce page to query the REST API
 
 The extension's user search and Setup navigation are an early preview. It does not yet hand the selected user into a separate LoginDeck browser profile. The Salesforce Login action opened in Setup will operate in the browser profile where the extension is installed. A secure extension-to-desktop handoff remains a follow-up milestone.
 
-## Releases
+## CI and releases
 
-Every push to main builds a Windows x64 installer and stores it as a short-lived Actions artifact.
-
-To publish a GitHub Release, open Actions → Build and Release LoginDeck → Run workflow, choose Major, Minor or Patch, optionally enter release notes, and run it. The workflow increments the latest semantic version tag, builds the installer and publishes the EXE.
-
+- **Build LoginDeck** runs on pull requests targeting `main` to validate the Windows installer, and again after changes are merged to `main`. Only the post-merge run uploads the 14-day installer artifact.
+- **Release LoginDeck** is separate. Run it from Actions → Release LoginDeck → Run workflow, choose Major, Minor or Patch, and optionally add release notes. It increments the version, commits the version bump to `main`, creates a version tag, builds the installer and updater metadata, and publishes the GitHub Release.
+- You can also create and push a matching `vX.Y.Z` tag yourself. The Release workflow will build and publish it, provided its version matches `package.json`.
+- Merging a pull request never publishes a GitHub Release automatically.
 
 ## In-app updates
 

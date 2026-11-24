@@ -33,11 +33,9 @@ function escapeHtml(value) {
 
 function syncProfileMode() {
   const personal = profileModeSelect.value === "personal";
-  if (personal) browserSelect.value = "edge";
-  browserSelect.disabled = personal;
   profileHelp.textContent = personal
-    ? "Opens Salesforce in your normal Microsoft Edge profile. Edge handles your existing cookies, signed-in accounts and saved passwords. LoginDeck does not access or copy them."
-    : "Creates a private browser profile for this session. Sign in once; LoginDeck keeps that session separate from your other profiles.";
+    ? `Opens the Salesforce URL above in your normal ${browserSelect.value === "edge" ? "Microsoft Edge" : "Google Chrome"} profile. The selected browser uses its existing sign-in, cookies and saved passwords; LoginDeck does not copy them.`
+    : "Opens the Salesforce URL above in a private browser profile created for this session. Enter your org My Domain URL or choose a login endpoint, then sign in once.";
 }
 
 async function renderSessions() {
@@ -45,9 +43,9 @@ async function renderSessions() {
   count.textContent = sessions.length;
   empty.classList.toggle("hidden", sessions.length !== 0);
   const previousAdmin = adminSessionSelect.value;
-  const adminSessions = sessions.filter(session => session.profileMode !== "personal");
-  adminSessionSelect.innerHTML = '<option value="">Select an isolated admin session</option>' + adminSessions.map(session =>
-    '<option value="' + escapeHtml(session.id) + '">' + escapeHtml(session.name) + ' · ' + escapeHtml(session.browser) + '</option>'
+  const adminSessions = sessions.filter(session => session.connection?.status === "authenticated");
+  adminSessionSelect.innerHTML = '<option value="">Select a signed-in admin session</option>' + adminSessions.map(session =>
+    '<option value="' + escapeHtml(session.id) + '">' + escapeHtml(session.name) + ' · ' + escapeHtml(session.connection.user?.username || session.browser) + '</option>'
   ).join("");
   if (adminSessions.some(session => session.id === previousAdmin)) adminSessionSelect.value = previousAdmin;
   list.innerHTML = sessions.map(session => {
@@ -57,10 +55,10 @@ async function renderSessions() {
         <div class="browser-icon">${session.browser === "edge" ? "e" : "C"}</div>
         <div class="session-info">
           <h4>${escapeHtml(session.name)}</h4>
-          <p>${personal ? "Personal Edge profile · Existing browser data" : `${escapeHtml(session.browser === "edge" ? "Microsoft Edge" : "Google Chrome")} · Isolated profile`} · ${escapeHtml(session.url)}</p>
+          <p>${personal ? `Personal ${session.browser === "edge" ? "Edge" : "Chrome"} profile · Existing browser data` : `${escapeHtml(session.browser === "edge" ? "Microsoft Edge" : "Google Chrome")} · Isolated profile`} · ${escapeHtml(session.url)}</p><p class="session-connection ${session.connection?.status === "authenticated" ? "connected" : ""}">${escapeHtml(session.connection?.label || "Status unavailable")}${session.connection?.user?.username ? " · " + escapeHtml(session.connection.user.username) : ""}</p>
         </div>
         <div class="session-actions">
-          <button class="launch-button" data-launch="${escapeHtml(session.id)}">${personal ? "Open in Edge ↗" : "Open isolated ↗"}</button>
+          <button class="launch-button" data-launch="${escapeHtml(session.id)}">${personal ? `Open in ${session.browser === "edge" ? "Edge" : "Chrome"} ↗` : "Open isolated ↗"}</button>
           <button class="delete-button" data-delete="${escapeHtml(session.id)}" title="Delete session">Delete</button>
         </div>
       </article>
@@ -69,6 +67,7 @@ async function renderSessions() {
 }
 
 profileModeSelect.addEventListener("change", syncProfileMode);
+browserSelect.addEventListener("change", syncProfileMode);
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
@@ -77,13 +76,12 @@ form.addEventListener("submit", async event => {
   try {
     await window.loginDeck.saveSession({
       name: document.getElementById("session-name").value,
-      browser: profileModeSelect.value === "personal" ? "edge" : browserSelect.value,
+      browser: browserSelect.value,
       profileMode: profileModeSelect.value,
       url: document.getElementById("salesforce-url").value
     });
     form.reset();
     document.getElementById("salesforce-url").value = "https://login.salesforce.com";
-    browserSelect.value = "edge";
     profileModeSelect.value = "isolated";
     syncProfileMode();
     await renderSessions();
@@ -242,3 +240,6 @@ window.loginDeck.getAppVersion().then(version => {
 document.getElementById("refresh").addEventListener("click", renderSessions);
 syncProfileMode();
 renderSessions().catch(error => notify(error.message));
+
+// Refresh the live Salesforce sign-in indicator while LoginDeck is open.
+setInterval(() => renderSessions().catch(() => {}), 5000);
