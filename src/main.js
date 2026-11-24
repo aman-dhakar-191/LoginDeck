@@ -4,6 +4,7 @@ const { chromium } = require("playwright");
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const crypto = require("node:crypto");
+const { spawn } = require("node:child_process");
 
 let mainWindow;
 let updateCheckStarted = false;
@@ -95,9 +96,6 @@ ipcMain.handle("sessions:save", async (_event, input) => {
   if (!name) throw new Error("Give this session a name.");
   if (!validSalesforceUrl(url)) throw new Error("Enter a valid HTTPS Salesforce login or My Domain URL.");
   browserChannel(browser);
-  if (profileMode === "personal" && browser !== "edge") {
-    throw new Error("Personal profile mode currently supports Microsoft Edge only.");
-  }
 
   const items = await readSavedSessions();
   const id = input?.id || crypto.randomUUID();
@@ -129,14 +127,33 @@ ipcMain.handle("sessions:launch", async (_event, id) => {
   const session = items.find(item => item.id === id);
   if (!session) throw new Error("Session configuration not found.");
 
-  // Personal mode delegates to Edge itself. Edge reuses its normal profile,
-  // cookies and password manager; LoginDeck never reads or copies credentials.
+  // Personal mode launches the selected installed browser without a custom
+  // user-data-dir, so Chromium reuses that user's normal profile and sign-in.
+  // LoginDeck never reads or copies cookies or saved passwords.
   if (session.profileMode === "personal") {
     if (process.platform !== "win32") {
-      throw new Error("Personal Edge mode is currently supported on Windows only.");
+      throw new Error("Using an existing browser profile is currently supported on Windows only.");
     }
-    await shell.openExternal(`microsoft-edge:${session.url}`);
-    return { id, status: "opened-personal" };
+    const roots = [
+      process.env.LOCALAPPDATA,
+      process.env.PROGRAMFILES,
+      process.env["PROGRAMFILES(X86)"]
+    ].filter(Boolean);
+    const relative = session.browser === "chrome"
+      ? ["Google/Chrome/Application/chrome.exe"]
+      : ["Microsoft/Edge/Application/msedge.exe"];
+    const candidates = roots.flatMap(root => relative.map(item => path.join(root, item)));
+    let executable = null;
+    for (const candidate of candidates) {
+      try { await fs.access(candidate); executable = candidate; break; } catch {}
+    }
+    if (!executable) {
+      throw new Error(`${session.browser === "edge" ? "Microsoft Edge" : "Google Chrome"} was not found. Install it, then try again.`);
+    }
+    const child = spawn(executable, [session.url], { detached: true, stdio: "ignore", windowsHide: true });
+    child.on("error", error => console.error("Could not open personal browser profile:", error));
+    child.unref();
+    return { id, status: session.browser === "edge" ? "opened-personal-edge" : "opened-personal-chrome" };
   }
 
   if (activeSessions.has(id)) {

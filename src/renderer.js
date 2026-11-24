@@ -33,10 +33,8 @@ function escapeHtml(value) {
 
 function syncProfileMode() {
   const personal = profileModeSelect.value === "personal";
-  if (personal) browserSelect.value = "edge";
-  browserSelect.disabled = personal;
   profileHelp.textContent = personal
-    ? "Opens the Salesforce URL above in your normal Microsoft Edge profile. Enter your org My Domain URL or choose a login endpoint. Edge handles your existing cookies and saved passwords."
+    ? `Opens the Salesforce URL above in your normal ${browserSelect.value === "edge" ? "Microsoft Edge" : "Google Chrome"} profile. The selected browser uses its existing sign-in, cookies and saved passwords; LoginDeck does not copy them.`
     : "Opens the Salesforce URL above in a private browser profile created for this session. Enter your org My Domain URL or choose a login endpoint, then sign in once.";
 }
 
@@ -77,13 +75,12 @@ form.addEventListener("submit", async event => {
   try {
     await window.loginDeck.saveSession({
       name: document.getElementById("session-name").value,
-      browser: profileModeSelect.value === "personal" ? "edge" : browserSelect.value,
+      browser: browserSelect.value,
       profileMode: profileModeSelect.value,
       url: document.getElementById("salesforce-url").value
     });
     form.reset();
     document.getElementById("salesforce-url").value = "https://login.salesforce.com";
-    browserSelect.value = "edge";
     profileModeSelect.value = "isolated";
     syncProfileMode();
     await renderSessions();
