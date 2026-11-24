@@ -1,56 +1,30 @@
 # LoginDeck
 
-LoginDeck is a Windows desktop app for managing multiple independent Salesforce browser sessions.
+LoginDeck is a Windows desktop session manager plus a companion browser extension.
 
-Each saved session gets its own persistent browser profile, so cookies and local storage are isolated from other sessions. Open one session in Microsoft Edge and another in Google Chrome, or use multiple profiles in the same browser family.
+## Desktop app
 
-## Download
+The desktop app manages persistent, isolated Chrome/Edge profiles. Download the Windows installer from the GitHub Releases page.
 
-Download the latest Windows installer from the [GitHub Releases](https://github.com/aman-dhakar-191/LoginDeck/releases) page. The GitHub Actions workflow builds a Windows x64 NSIS installer when code is pushed to `main`, and publishes a GitHub Release when a `v*` tag is pushed.
+## Companion extension (early preview)
 
-## Requirements
+The unpacked Manifest V3 extension is in the extension/ folder.
 
-- Windows 10/11 x64
-- Microsoft Edge and/or Google Chrome installed
+1. Open chrome://extensions or edge://extensions.
+2. Enable Developer mode.
+3. Choose Load unpacked and select the repository's extension folder.
+4. Open a Salesforce org tab, then click the LoginDeck extension icon to open its side panel.
+5. Search by user name, username or email.
+6. Choose Open Login As in Setup, then use Salesforce's standard Login action on the user page.
 
-## Use
+The extension uses the currently signed-in Salesforce page to query the REST API. It does not collect or export session cookies. User search requires Salesforce API access and appropriate visibility/permissions.
 
-1. Install and open LoginDeck.
-2. Give a session a name, choose Edge or Chrome, and enter your Salesforce login URL or My Domain URL.
-3. Save the session.
-4. Click **Open window**. LoginDeck opens a dedicated browser profile in its own window.
-5. Sign in to Salesforce in that window. Repeat for other users.
+## Current integration boundary
 
-LoginDeck never asks for or stores Salesforce passwords. Browser sign-in state is stored in separate local profile folders managed by Playwright.
+The extension's user search and Setup navigation are an early preview. It does not yet hand the selected user into a separate LoginDeck browser profile. The Salesforce Login action opened in Setup will operate in the browser profile where the extension is installed. A secure extension-to-desktop handoff is a follow-up milestone; it needs a supported way to perform the admin Login As flow inside the destination isolated profile without exporting browser cookies.
 
-## Build locally
+## Releases
 
-```bash
-npm install
-npm start
-```
+Every push to main builds a Windows x64 installer and stores it as a short-lived Actions artifact.
 
-Build the Windows installer (on Windows):
-
-```bash
-npm run dist
-```
-
-The installer is written to `release/`.
-
-## Current scope
-
-- Desktop app shell and session manager UI.
-- Edge and Chrome selection.
-- One persistent Playwright browser profile per saved session.
-- Separate browser windows and independent cookies/storage.
-- Local session configuration and browser profiles.
-
-**Salesforce Admin "Login As" handoff is not automated yet.** This version opens independent Salesforce sessions; sign in to each user account separately. A later milestone can add a supported, secure Login As handoff flow.
-
-## Security notes
-
-- Browser profiles contain sensitive authentication cookies. Keep your Windows account protected.
-- Do not share or commit the app's local data directory.
-- Use only Salesforce orgs and accounts you are authorized to access.
-- LoginDeck does not bypass Salesforce authentication or permissions.
+To publish a GitHub Release, open Actions → Build and Release LoginDeck → Run workflow, choose Major, Minor or Patch, optionally enter release notes, and run it. The workflow increments the latest semantic version tag, builds the installer and publishes the EXE.

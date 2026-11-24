@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "LoginDeck for Salesforce",
+  "version": "0.1.0",
+  "description": "Search Salesforce users from a side panel and open their Setup page.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "sidePanel",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://*.my.salesforce.com/*",
+    "https://*.lightning.force.com/*",
+    "https://login.salesforce.com/*",
+    "https://test.salesforce.com/*"
+  ],
+  "action": {
+    "default_title": "Open LoginDeck"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}

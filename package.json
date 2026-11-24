@@ -4,40 +4,15 @@
   "private": true,
   "description": "Manage isolated Salesforce browser sessions",
   "main": "src/main.js",
-  "scripts": {
-    "start": "electron .",
-    "dist": "electron-builder --win nsis"
-  },
-  "dependencies": {
-    "playwright": "^1.56.0"
-  },
-  "devDependencies": {
-    "electron": "^39.2.0",
-    "electron-builder": "^26.0.12"
-  },
+  "scripts": {"start": "electron .", "dist": "electron-builder --win nsis --publish never"},
+  "dependencies": {"playwright": "^1.56.0"},
+  "devDependencies": {"electron": "^39.2.0", "electron-builder": "^26.0.12"},
   "build": {
     "appId": "io.logindeck.desktop",
     "productName": "LoginDeck",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "src/**/*",
-      "package.json"
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    }
+    "directories": {"output": "release"},
+    "files": ["src/**/*", "package.json"],
+    "win": {"target": [{"target": "nsis", "arch": ["x64"]}]},
+    "nsis": {"oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "createStartMenuShortcut": true}
   }
 }
