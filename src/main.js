@@ -1,10 +1,12 @@
 const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const { chromium } = require("playwright");
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const crypto = require("node:crypto");
 
 let mainWindow;
+let updateCheckStarted = false;
 const activeSessions = new Map();
 const sessionsFile = () => path.join(app.getPath("userData"), "sessions.json");
 const profilesDir = () => path.join(app.getPath("userData"), "browser-profiles");
@@ -61,6 +63,27 @@ async function createMainWindow() {
   });
   await mainWindow.loadFile(path.join(__dirname, "index.html"));
 }
+
+function sendUpdateStatus(status, details = {}) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("updater:status", { status, ...details });
+}
+
+ipcMain.handle("updater:version", async () => app.getVersion());
+ipcMain.handle("updater:check", async () => {
+  if (!app.isPackaged) return { status: "development" };
+  try {
+    sendUpdateStatus("checking");
+    await autoUpdater.checkForUpdates();
+    return { status: "checking" };
+  } catch (error) {
+    sendUpdateStatus("error", { message: error.message });
+    throw error;
+  }
+});
+ipcMain.handle("updater:install", async () => {
+  if (!app.isPackaged) throw new Error("Updates are available only in the installed app.");
+  autoUpdater.quitAndInstall();
+});
 
 ipcMain.handle("sessions:list", async () => readSavedSessions());
 
@@ -205,6 +228,23 @@ ipcMain.handle("app:openExternal", async (_event, url) => {
 
 app.whenReady().then(async () => {
   await createMainWindow();
+
+  if (app.isPackaged && !updateCheckStarted) {
+    updateCheckStarted = true;
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on("checking-for-update", () => sendUpdateStatus("checking"));
+    autoUpdater.on("update-available", info => sendUpdateStatus("available", { version: info.version }));
+    autoUpdater.on("update-not-available", info => sendUpdateStatus("up-to-date", { version: info.version }));
+    autoUpdater.on("download-progress", progress => sendUpdateStatus("downloading", {
+      percent: Math.round(progress.percent), transferred: progress.transferred, total: progress.total
+    }));
+    autoUpdater.on("update-downloaded", info => sendUpdateStatus("downloaded", { version: info.version }));
+    autoUpdater.on("error", error => sendUpdateStatus("error", { message: error.message }));
+    setTimeout(() => autoUpdater.checkForUpdates().catch(error => {
+      sendUpdateStatus("error", { message: error.message });
+    }), 4500);
+  }
   app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0) await createMainWindow();
   });

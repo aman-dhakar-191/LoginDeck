@@ -11,6 +11,11 @@ const userSearchInput = document.getElementById("user-search");
 const userSearchButton = document.getElementById("user-search-button");
 const userSearchStatus = document.getElementById("user-search-status");
 const userResults = document.getElementById("user-results");
+const updateBanner = document.getElementById("update-banner");
+const updateTitle = document.getElementById("update-title");
+const updateDetail = document.getElementById("update-detail");
+const updateCheckButton = document.getElementById("update-check");
+const updateInstallButton = document.getElementById("update-install");
 
 function notify(message) {
   toast.textContent = message;
@@ -199,6 +204,39 @@ userSearchInput.addEventListener("keydown", event => {
   if (event.key === "Enter") runUserSearch();
 });
 
+function showUpdateStatus(payload) {
+  updateBanner.hidden = false;
+  updateInstallButton.hidden = true;
+  updateCheckButton.disabled = false;
+  const messages = {
+    checking: ["Checking for updates…", "Connecting to LoginDeck releases on GitHub."],
+    available: ["Update found: v" + payload.version, "Downloading the new version in the background…"],
+    downloading: ["Downloading update · " + payload.percent + "%", "You can keep using LoginDeck while it downloads."],
+    downloaded: ["Update ready · v" + payload.version, "Restart LoginDeck to finish installing the update."],
+    "up-to-date": ["You're up to date", "You're running the latest published LoginDeck release."],
+    development: ["Updates unavailable in development", "Install a published Windows release to use in-app updates."],
+    error: ["Couldn't check for updates", payload.message || "Check your internet connection and try again."]
+  };
+  const [title, detail] = messages[payload.status] || ["Update status", ""];
+  updateTitle.textContent = title;
+  updateDetail.textContent = detail;
+  if (payload.status === "downloaded") updateInstallButton.hidden = false;
+  if (payload.status === "error") updateCheckButton.disabled = false;
+  if (payload.status === "checking" || payload.status === "downloading") updateCheckButton.disabled = true;
+}
+
+window.loginDeck.onUpdateStatus(showUpdateStatus);
+updateCheckButton.addEventListener("click", async () => {
+  updateCheckButton.disabled = true;
+  try { await window.loginDeck.checkForUpdates(); }
+  catch (error) { showUpdateStatus({ status: "error", message: error.message }); }
+});
+updateInstallButton.addEventListener("click", () => window.loginDeck.installUpdate());
+window.loginDeck.getAppVersion().then(version => {
+  updateBanner.hidden = false;
+  updateTitle.textContent = "LoginDeck v" + version;
+  updateDetail.textContent = "Automatic GitHub release updates are enabled.";
+}).catch(() => {});
 document.getElementById("refresh").addEventListener("click", renderSessions);
 syncProfileMode();
 renderSessions().catch(error => notify(error.message));

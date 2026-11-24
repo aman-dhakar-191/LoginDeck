@@ -35,3 +35,8 @@ The extension's user search and Setup navigation are an early preview. It does n
 Every push to main builds a Windows x64 installer and stores it as a short-lived Actions artifact.
 
 To publish a GitHub Release, open Actions → Build and Release LoginDeck → Run workflow, choose Major, Minor or Patch, optionally enter release notes, and run it. The workflow increments the latest semantic version tag, builds the installer and publishes the EXE.
+
+
+## In-app updates
+
+Installed Windows builds check the GitHub Releases feed shortly after startup. When a newer release is published, LoginDeck downloads it in the background and shows a **Restart & install** action when ready. You can also use **Check now**. Updates are delivered through electron-updater and GitHub Releases; development builds do not self-update.
