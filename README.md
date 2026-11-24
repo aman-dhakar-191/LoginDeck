@@ -39,4 +39,4 @@ To publish a GitHub Release, open Actions → Build and Release LoginDeck → Ru
 
 ## In-app updates
 
-Installed Windows builds check the GitHub Releases feed shortly after startup. When a newer release is published, LoginDeck downloads it in the background and shows a **Restart & install** action when ready. You can also use **Check now**. Updates are delivered through electron-updater and GitHub Releases; development builds do not self-update.
+Installed Windows builds check the GitHub Releases feed shortly after startup. When a newer release is published, LoginDeck downloads it in the background and shows a **Restart & install** action when ready. You can also use **Check now**. Updates are delivered through electron-updater and GitHub Releases. Release builds increment package.json before building and upload the installer plus updater metadata; development builds do not self-update.
