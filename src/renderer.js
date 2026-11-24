@@ -43,9 +43,9 @@ async function renderSessions() {
   count.textContent = sessions.length;
   empty.classList.toggle("hidden", sessions.length !== 0);
   const previousAdmin = adminSessionSelect.value;
-  const adminSessions = sessions.filter(session => session.profileMode !== "personal");
-  adminSessionSelect.innerHTML = '<option value="">Select an isolated admin session</option>' + adminSessions.map(session =>
-    '<option value="' + escapeHtml(session.id) + '">' + escapeHtml(session.name) + ' · ' + escapeHtml(session.browser) + '</option>'
+  const adminSessions = sessions.filter(session => session.connection?.status === "authenticated");
+  adminSessionSelect.innerHTML = '<option value="">Select a signed-in admin session</option>' + adminSessions.map(session =>
+    '<option value="' + escapeHtml(session.id) + '">' + escapeHtml(session.name) + ' · ' + escapeHtml(session.connection.user?.username || session.browser) + '</option>'
   ).join("");
   if (adminSessions.some(session => session.id === previousAdmin)) adminSessionSelect.value = previousAdmin;
   list.innerHTML = sessions.map(session => {
@@ -55,7 +55,7 @@ async function renderSessions() {
         <div class="browser-icon">${session.browser === "edge" ? "e" : "C"}</div>
         <div class="session-info">
           <h4>${escapeHtml(session.name)}</h4>
-          <p>${personal ? `Personal ${session.browser === "edge" ? "Edge" : "Chrome"} profile · Existing browser data` : `${escapeHtml(session.browser === "edge" ? "Microsoft Edge" : "Google Chrome")} · Isolated profile`} · ${escapeHtml(session.url)}</p>
+          <p>${personal ? `Personal ${session.browser === "edge" ? "Edge" : "Chrome"} profile · Existing browser data` : `${escapeHtml(session.browser === "edge" ? "Microsoft Edge" : "Google Chrome")} · Isolated profile`} · ${escapeHtml(session.url)}</p><p class="session-connection ${session.connection?.status === "authenticated" ? "connected" : ""}">${escapeHtml(session.connection?.label || "Status unavailable")}${session.connection?.user?.username ? " · " + escapeHtml(session.connection.user.username) : ""}</p>
         </div>
         <div class="session-actions">
           <button class="launch-button" data-launch="${escapeHtml(session.id)}">${personal ? `Open in ${session.browser === "edge" ? "Edge" : "Chrome"} ↗` : "Open isolated ↗"}</button>

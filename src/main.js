@@ -86,7 +86,54 @@ ipcMain.handle("updater:install", async () => {
   autoUpdater.quitAndInstall();
 });
 
-ipcMain.handle("sessions:list", async () => readSavedSessions());
+async function inspectSessionStatus(session) {
+  const active = activeSessions.get(session.id);
+  if (!active) {
+    return {
+      status: session.profileMode === "personal" ? "external" : "closed",
+      label: session.profileMode === "personal" ? "Browser profile · status not connected" : "Not open"
+    };
+  }
+  try {
+    const state = await active.page.evaluate(async () => {
+      const current = location.href;
+      if (/\/login|login\.salesforce\.com|test\.salesforce\.com\/\?/.test(current)) {
+        return { authenticated: false };
+      }
+      const versionsResponse = await fetch("/services/data/", { credentials: "include" });
+      if (!versionsResponse.ok) return { authenticated: false };
+      const versions = await versionsResponse.json();
+      const version = versions.map(item => Number(item.version)).filter(Number.isFinite).sort((a, b) => b - a)[0];
+      if (!version) return { authenticated: false };
+      const response = await fetch("/services/data/v" + version.toFixed(1) + "/chatter/users/me", { credentials: "include" });
+      if (!response.ok) return { authenticated: false };
+      const user = await response.json();
+      return {
+        authenticated: true,
+        user: {
+          id: user.id || user.Id,
+          name: user.name || user.Name,
+          username: user.username || user.Username,
+          email: user.email || user.Email
+        }
+      };
+    });
+    if (state.authenticated && state.user?.username) {
+      return { status: "authenticated", label: "Signed in as " + (state.user.name || state.user.username), user: state.user };
+    }
+    return { status: "open", label: "Browser open · sign-in not detected" };
+  } catch {
+    return { status: "unknown", label: "Checking sign-in…" };
+  }
+}
+
+ipcMain.handle("sessions:list", async () => {
+  const sessions = await readSavedSessions();
+  return Promise.all(sessions.map(async session => ({
+    ...session,
+    connection: await inspectSessionStatus(session)
+  })));
+});
 
 ipcMain.handle("sessions:save", async (_event, input) => {
   const name = String(input?.name || "").trim().slice(0, 50);
