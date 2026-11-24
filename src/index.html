@@ -12,13 +12,12 @@
     <header class="topbar">
       <div class="brand-mark">LD</div>
       <div class="brand-copy"><h1>LoginDeck</h1><p>Personal Edge + isolated sessions</p></div>
-      <span class="local-pill"><i></i> Local app</span>
+      <div class="topbar-actions"><button id="update-check" class="quiet-button update-check-top" type="button">↻ Check for updates</button><span class="local-pill"><i></i> Local app</span></div>
     </header>
 
     <section id="update-banner" class="update-banner" hidden aria-live="polite">
       <div class="update-copy"><strong id="update-title">Checking for updates…</strong><span id="update-detail">LoginDeck will check GitHub Releases automatically.</span></div>
       <div class="update-actions">
-        <button id="update-check" class="quiet-button" type="button">Check now</button>
         <button id="update-install" class="primary-button" type="button" hidden>Restart & install</button>
       </div>
     </section>
