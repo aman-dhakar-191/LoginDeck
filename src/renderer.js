@@ -16,6 +16,7 @@ const updateTitle = document.getElementById("update-title");
 const updateDetail = document.getElementById("update-detail");
 const updateCheckButton = document.getElementById("update-check");
 const updateInstallButton = document.getElementById("update-install");
+const appVersionLabel = document.getElementById("app-version-label");
 
 function notify(message) {
   toast.textContent = message;
@@ -233,6 +234,7 @@ updateCheckButton.addEventListener("click", async () => {
 });
 updateInstallButton.addEventListener("click", () => window.loginDeck.installUpdate());
 window.loginDeck.getAppVersion().then(version => {
+  appVersionLabel.textContent = "v" + version;
   updateBanner.hidden = false;
   updateTitle.textContent = "LoginDeck v" + version;
   updateDetail.textContent = "Automatic GitHub release updates are enabled.";
