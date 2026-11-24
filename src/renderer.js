@@ -55,10 +55,10 @@ async function renderSessions() {
         <div class="browser-icon">${session.browser === "edge" ? "e" : "C"}</div>
         <div class="session-info">
           <h4>${escapeHtml(session.name)}</h4>
-          <p>${personal ? "Personal Edge profile · Existing browser data" : `${escapeHtml(session.browser === "edge" ? "Microsoft Edge" : "Google Chrome")} · Isolated profile`} · ${escapeHtml(session.url)}</p>
+          <p>${personal ? `Personal ${session.browser === "edge" ? "Edge" : "Chrome"} profile · Existing browser data` : `${escapeHtml(session.browser === "edge" ? "Microsoft Edge" : "Google Chrome")} · Isolated profile`} · ${escapeHtml(session.url)}</p>
         </div>
         <div class="session-actions">
-          <button class="launch-button" data-launch="${escapeHtml(session.id)}">${personal ? "Open in Edge ↗" : "Open isolated ↗"}</button>
+          <button class="launch-button" data-launch="${escapeHtml(session.id)}">${personal ? `Open in ${session.browser === "edge" ? "Edge" : "Chrome"} ↗` : "Open isolated ↗"}</button>
           <button class="delete-button" data-delete="${escapeHtml(session.id)}" title="Delete session">Delete</button>
         </div>
       </article>
@@ -67,6 +67,7 @@ async function renderSessions() {
 }
 
 profileModeSelect.addEventListener("change", syncProfileMode);
+browserSelect.addEventListener("change", syncProfileMode);
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
