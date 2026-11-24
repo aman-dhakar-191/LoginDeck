@@ -11,7 +11,8 @@ const profilesDir = () => path.join(app.getPath("userData"), "browser-profiles")
 
 async function readSavedSessions() {
   try {
-    return JSON.parse(await fs.readFile(sessionsFile(), "utf8"));
+    const value = JSON.parse(await fs.readFile(sessionsFile(), "utf8"));
+    return Array.isArray(value) ? value : [];
   } catch {
     return [];
   }
@@ -37,6 +38,10 @@ function browserChannel(browser) {
   if (browser === "chrome") return "chrome";
   if (browser === "edge") return "msedge";
   throw new Error("Choose Google Chrome or Microsoft Edge.");
+}
+
+function validId(id) {
+  return typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 }
 
 async function createMainWindow() {
@@ -69,8 +74,9 @@ ipcMain.handle("sessions:save", async (_event, input) => {
 
   const items = await readSavedSessions();
   const id = input?.id || crypto.randomUUID();
-  const existing = items.findIndex(item => item.id === id);
+  if (!validId(id)) throw new Error("Invalid session identifier.");
   const record = { id, name, url, browser };
+  const existing = items.findIndex(item => item.id === id);
   if (existing >= 0) items[existing] = record;
   else items.push(record);
   await saveSessions(items);
@@ -78,6 +84,7 @@ ipcMain.handle("sessions:save", async (_event, input) => {
 });
 
 ipcMain.handle("sessions:delete", async (_event, id) => {
+  if (!validId(id)) throw new Error("Invalid session identifier.");
   const active = activeSessions.get(id);
   if (active) {
     await active.context.close().catch(() => {});
@@ -85,10 +92,12 @@ ipcMain.handle("sessions:delete", async (_event, id) => {
   }
   const items = (await readSavedSessions()).filter(item => item.id !== id);
   await saveSessions(items);
+  await fs.rm(path.join(profilesDir(), id), { recursive: true, force: true });
   return items;
 });
 
 ipcMain.handle("sessions:launch", async (_event, id) => {
+  if (!validId(id)) throw new Error("Invalid session identifier.");
   const items = await readSavedSessions();
   const session = items.find(item => item.id === id);
   if (!session) throw new Error("Session configuration not found.");
@@ -102,14 +111,21 @@ ipcMain.handle("sessions:launch", async (_event, id) => {
   const profilePath = path.join(profilesDir(), id);
   await fs.mkdir(profilePath, { recursive: true });
 
-  // A distinct persistent browser profile per saved session keeps cookies and
-  // local storage isolated and preserves that user's login between app launches.
-  const context = await chromium.launchPersistentContext(profilePath, {
-    channel,
-    headless: false,
-    viewport: null,
-    args: ["--new-window"]
-  });
+  // Each persistent context gets a dedicated on-disk profile, cookie jar and storage.
+  let context;
+  try {
+    context = await chromium.launchPersistentContext(profilePath, {
+      channel,
+      headless: false,
+      viewport: null,
+      args: ["--new-window"]
+    });
+  } catch (error) {
+    if (/executable|not found|could not find/i.test(error.message)) {
+      throw new Error(`${session.browser === "edge" ? "Microsoft Edge" : "Google Chrome"} was not found. Install it, then try again.`);
+    }
+    throw error;
+  }
 
   const page = context.pages()[0] || await context.newPage();
   activeSessions.set(id, { context, page });
