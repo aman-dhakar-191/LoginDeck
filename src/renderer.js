@@ -36,8 +36,8 @@ function syncProfileMode() {
   if (personal) browserSelect.value = "edge";
   browserSelect.disabled = personal;
   profileHelp.textContent = personal
-    ? "Opens Salesforce in your normal Microsoft Edge profile. Edge handles your existing cookies, signed-in accounts and saved passwords. LoginDeck does not access or copy them."
-    : "Creates a private browser profile for this session. Sign in once; LoginDeck keeps that session separate from your other profiles.";
+    ? "Opens the Salesforce URL above in your normal Microsoft Edge profile. Enter your org My Domain URL or choose a login endpoint. Edge handles your existing cookies and saved passwords."
+    : "Opens the Salesforce URL above in a private browser profile created for this session. Enter your org My Domain URL or choose a login endpoint, then sign in once.";
 }
 
 async function renderSessions() {
