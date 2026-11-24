@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self';">
+  <title>LoginDeck</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand-mark">LD</div>
+      <div class="brand-copy"><h1>LoginDeck</h1><p>Isolated Salesforce sessions</p></div>
+      <span class="local-pill"><i></i> Local app</span>
+    </header>
+
+    <section class="intro">
+      <p class="eyebrow">MULTI-USER WORKSPACE</p>
+      <h2>Every user gets<br><span>their own browser.</span></h2>
+      <p class="intro-copy">Launch separate Chrome or Edge windows with independent cookies and saved sign-ins.</p>
+    </section>
+
+    <section class="panel create-panel">
+      <div class="section-heading"><div><p class="eyebrow">NEW SESSION</p><h3>Create a session</h3></div><span class="step">01</span></div>
+      <form id="session-form">
+        <div class="form-grid">
+          <label class="field"><span>Session name</span><input id="session-name" maxlength="50" placeholder="e.g. UAT - Sales Manager" required></label>
+          <label class="field"><span>Browser</span><select id="browser"><option value="edge">Microsoft Edge</option><option value="chrome">Google Chrome</option></select></label>
+          <label class="field full"><span>Salesforce URL</span><input id="salesforce-url" type="url" value="https://login.salesforce.com" placeholder="https://your-domain.my.salesforce.com" required></label>
+        </div>
+        <div class="form-footer"><p>Credentials stay in the browser. LoginDeck never asks for your password.</p><button class="primary-button" type="submit"><span>＋</span> Save session</button></div>
+      </form>
+    </section>
+
+    <section class="sessions-section">
+      <div class="section-heading"><div><p class="eyebrow">YOUR WORKSPACE</p><h3>Saved sessions <span id="session-count" class="count">0</span></h3></div><button id="refresh" class="quiet-button" type="button">Refresh</button></div>
+      <div id="session-list" class="session-list"></div>
+      <div id="empty-state" class="empty-state"><div class="empty-icon">↗</div><h4>No sessions yet</h4><p>Create a session above. Each one opens in its own isolated browser profile.</p></div>
+    </section>
+
+    <footer><span>LoginDeck <span class="muted">· early preview</span></span><span>Sessions are stored locally on this device</span></footer>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </main>
+  <script src="renderer.js"></script>
+</body>
+</html>

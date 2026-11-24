@@ -1,62 +1,56 @@
 # LoginDeck
 
-Manage multiple isolated Salesforce user sessions in separate visible browser windows.
+LoginDeck is a Windows desktop app for managing multiple independent Salesforce browser sessions.
 
-> Early prototype. Use only Salesforce orgs and accounts you are authorized to access.
+Each saved session gets its own persistent browser profile, so cookies and local storage are isolated from other sessions. Open one session in Microsoft Edge and another in Google Chrome, or use multiple profiles in the same browser family.
 
-## Why
+## Download
 
-Incognito windows in the same Chrome/Edge Incognito session share the Incognito cookie store. LoginDeck instead creates one Playwright `BrowserContext` per session, giving each session independent cookies and browser storage.
+Download the latest Windows installer from the [GitHub Releases](https://github.com/aman-dhakar-191/LoginDeck/releases) page. The GitHub Actions workflow builds a Windows x64 NSIS installer when code is pushed to `main`, and publishes a GitHub Release when a `v*` tag is pushed.
 
 ## Requirements
 
-- Node.js 20+
-- Google Chrome or Microsoft Edge installed (optional), or Playwright's bundled Chromium
+- Windows 10/11 x64
+- Microsoft Edge and/or Google Chrome installed
 
-## Setup
+## Use
+
+1. Install and open LoginDeck.
+2. Give a session a name, choose Edge or Chrome, and enter your Salesforce login URL or My Domain URL.
+3. Save the session.
+4. Click **Open window**. LoginDeck opens a dedicated browser profile in its own window.
+5. Sign in to Salesforce in that window. Repeat for other users.
+
+LoginDeck never asks for or stores Salesforce passwords. Browser sign-in state is stored in separate local profile folders managed by Playwright.
+
+## Build locally
 
 ```bash
 npm install
-npx playwright install chromium
-```
-
-## Run
-
-```bash
 npm start
 ```
 
-Set the browser and URL using environment variables:
+Build the Windows installer (on Windows):
 
-**PowerShell**
-```powershell
-$env:BROWSER="msedge" # chrome, msedge, or chromium
-$env:SALESFORCE_URL="https://your-domain.my.salesforce.com"
-$env:SESSION_COUNT="2"
-npm start
-```
-
-**macOS/Linux**
 ```bash
-BROWSER=chrome SALESFORCE_URL=https://your-domain.my.salesforce.com SESSION_COUNT=2 npm start
+npm run dist
 ```
 
-The initial prototype opens separate visible windows. Sign in to each window independently.
+The installer is written to `release/`.
 
-## Architecture
+## Current scope
 
-- One Playwright browser process.
-- One independent non-persistent browser context per user session.
-- One visible page/window per context.
-- No cookies or storage are copied between contexts.
-- Contexts are in-memory only in this prototype; closing LoginDeck clears them.
+- Desktop app shell and session manager UI.
+- Edge and Chrome selection.
+- One persistent Playwright browser profile per saved session.
+- Separate browser windows and independent cookies/storage.
+- Local session configuration and browser profiles.
 
-## Salesforce Login As
+**Salesforce Admin "Login As" handoff is not automated yet.** This version opens independent Salesforce sessions; sign in to each user account separately. A later milestone can add a supported, secure Login As handoff flow.
 
-Automating the Salesforce Login As handoff is not implemented yet. The next milestone is to test how the org's Login As action establishes its authenticated session, then perform that handoff inside the intended isolated context. Do not copy an authenticated URL or cookies from one user's context into another.
+## Security notes
 
-## Security
-
-- Never commit credentials, cookies, access tokens, or session data.
-- Prefer a dedicated Salesforce sandbox and test users.
-- Treat each browser session as sensitive authentication material.
+- Browser profiles contain sensitive authentication cookies. Keep your Windows account protected.
+- Do not share or commit the app's local data directory.
+- Use only Salesforce orgs and accounts you are authorized to access.
+- LoginDeck does not bypass Salesforce authentication or permissions.
