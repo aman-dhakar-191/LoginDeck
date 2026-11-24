@@ -68,14 +68,18 @@ ipcMain.handle("sessions:save", async (_event, input) => {
   const name = String(input?.name || "").trim().slice(0, 50);
   const url = String(input?.url || "").trim();
   const browser = String(input?.browser || "edge");
+  const profileMode = input?.profileMode === "personal" ? "personal" : "isolated";
   if (!name) throw new Error("Give this session a name.");
   if (!validSalesforceUrl(url)) throw new Error("Enter a valid HTTPS Salesforce login or My Domain URL.");
   browserChannel(browser);
+  if (profileMode === "personal" && browser !== "edge") {
+    throw new Error("Personal profile mode currently supports Microsoft Edge only.");
+  }
 
   const items = await readSavedSessions();
   const id = input?.id || crypto.randomUUID();
   if (!validId(id)) throw new Error("Invalid session identifier.");
-  const record = { id, name, url, browser };
+  const record = { id, name, url, browser, profileMode };
   const existing = items.findIndex(item => item.id === id);
   if (existing >= 0) items[existing] = record;
   else items.push(record);
@@ -101,6 +105,17 @@ ipcMain.handle("sessions:launch", async (_event, id) => {
   const items = await readSavedSessions();
   const session = items.find(item => item.id === id);
   if (!session) throw new Error("Session configuration not found.");
+
+  // Personal mode delegates to Edge itself. Edge reuses its normal profile,
+  // cookies and password manager; LoginDeck never reads or copies credentials.
+  if (session.profileMode === "personal") {
+    if (process.platform !== "win32") {
+      throw new Error("Personal Edge mode is currently supported on Windows only.");
+    }
+    await shell.openExternal(`microsoft-edge:${session.url}`);
+    return { id, status: "opened-personal" };
+  }
+
   if (activeSessions.has(id)) {
     const existing = activeSessions.get(id);
     await existing.page.bringToFront().catch(() => {});
@@ -111,7 +126,7 @@ ipcMain.handle("sessions:launch", async (_event, id) => {
   const profilePath = path.join(profilesDir(), id);
   await fs.mkdir(profilePath, { recursive: true });
 
-  // Each persistent context gets a dedicated on-disk profile, cookie jar and storage.
+  // Isolated mode owns a separate on-disk profile, cookie jar and storage.
   let context;
   try {
     context = await chromium.launchPersistentContext(profilePath, {
