@@ -1,0 +1,95 @@
+name: Release LoginDeck
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Version increment
+        required: true
+        type: choice
+        options: [major, minor, patch]
+        default: patch
+      release_notes:
+        description: Release notes (optional)
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: logindeck-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish GitHub Release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout latest main or requested tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || 'main' }}
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Prepare release version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            git fetch --tags
+            $latest = git tag --list 'v*' --sort=-v:refname | Select-Object -First 1
+            if (-not $latest) {
+              $package = Get-Content package.json | ConvertFrom-Json
+              $latest = "v$($package.version)"
+            }
+            if ($latest -notmatch '^v?(\d+)\.(\d+)\.(\d+)$') { throw "Invalid semver tag: $latest" }
+            $major = [int]$Matches[1]; $minor = [int]$Matches[2]; $patch = [int]$Matches[3]
+            switch ("${{ inputs.release_type }}") {
+              'major' { $major++; $minor = 0; $patch = 0 }
+              'minor' { $minor++; $patch = 0 }
+              'patch' { $patch++ }
+              default { throw 'Unknown release type.' }
+            }
+            $version = "$major.$minor.$patch"
+            npm version $version --no-git-tag-version --allow-same-version
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add package.json
+            git commit -m "chore: release v$version"
+            git push origin HEAD:main
+            git tag "v$version"
+            git push origin "v$version"
+            "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } else {
+            $tag = "${{ github.ref_name }}"
+            if ($tag -notmatch '^v(\d+)\.(\d+)\.(\d+)$') { throw "Invalid release tag: $tag" }
+            $version = $tag.Substring(1)
+            $package = Get-Content package.json | ConvertFrom-Json
+            if ($package.version -ne $version) {
+              throw "Tag $tag does not match package.json version $($package.version). Create releases from the Release workflow instead."
+            }
+            "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+      - name: Install dependencies
+        run: npm install
+      - name: Build Windows installer and updater metadata
+        run: npm run dist
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: main
+          name: LoginDeck ${{ steps.version.outputs.tag }}
+          body: ${{ inputs.release_notes }}
+          generate_release_notes: ${{ github.event_name == 'push' || inputs.release_notes == '' }}
+          files: release/*
