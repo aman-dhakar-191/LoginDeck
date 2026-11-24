@@ -6,6 +6,11 @@ const toast = document.getElementById("toast");
 const browserSelect = document.getElementById("browser");
 const profileModeSelect = document.getElementById("profile-mode");
 const profileHelp = document.getElementById("profile-help");
+const adminSessionSelect = document.getElementById("admin-session");
+const userSearchInput = document.getElementById("user-search");
+const userSearchButton = document.getElementById("user-search-button");
+const userSearchStatus = document.getElementById("user-search-status");
+const userResults = document.getElementById("user-results");
 
 function notify(message) {
   toast.textContent = message;
@@ -33,6 +38,12 @@ async function renderSessions() {
   const sessions = await window.loginDeck.listSessions();
   count.textContent = sessions.length;
   empty.classList.toggle("hidden", sessions.length !== 0);
+  const previousAdmin = adminSessionSelect.value;
+  const adminSessions = sessions.filter(session => session.profileMode !== "personal");
+  adminSessionSelect.innerHTML = '<option value="">Select an isolated admin session</option>' + adminSessions.map(session =>
+    '<option value="' + escapeHtml(session.id) + '">' + escapeHtml(session.name) + ' · ' + escapeHtml(session.browser) + '</option>'
+  ).join("");
+  if (adminSessions.some(session => session.id === previousAdmin)) adminSessionSelect.value = previousAdmin;
   list.innerHTML = sessions.map(session => {
     const personal = session.profileMode === "personal";
     return `
@@ -108,6 +119,84 @@ list.addEventListener("click", async event => {
       notify(error.message || "Could not delete session.");
     }
   }
+});
+
+
+function setUserSearchStatus(message, error = false) {
+  userSearchStatus.textContent = message;
+  userSearchStatus.classList.toggle("error", error);
+}
+
+function renderUserResults(users) {
+  userResults.replaceChildren();
+  if (!users.length) {
+    setUserSearchStatus("No matching users found.");
+    return;
+  }
+  setUserSearchStatus(users.length + " matching user(s). Select Login As to open the standard Salesforce user page.");
+  for (const user of users) {
+    const card = document.createElement("article");
+    card.className = "user-result";
+    const details = document.createElement("div");
+    details.className = "user-result-details";
+    const name = document.createElement("strong");
+    name.textContent = user.Name || "(No name)";
+    const username = document.createElement("span");
+    username.textContent = user.Username || "";
+    const email = document.createElement("span");
+    email.textContent = user.Email || "";
+    details.append(name, username, email);
+    const status = document.createElement("span");
+    status.className = "user-status" + (user.IsActive ? "" : " inactive");
+    status.textContent = user.IsActive ? "Active" : "Inactive";
+    const action = document.createElement("button");
+    action.className = "launch-button";
+    action.type = "button";
+    action.textContent = "Login As ↗";
+    action.disabled = !user.IsActive;
+    action.addEventListener("click", async () => {
+      action.disabled = true;
+      try {
+        await window.loginDeck.openLoginAs(adminSessionSelect.value, user.Id);
+        notify("Opened the Salesforce user page. Use its standard Login action.");
+      } catch (error) {
+        notify(error.message || "Could not open Login As.");
+      } finally {
+        action.disabled = !user.IsActive;
+      }
+    });
+    card.append(details, status, action);
+    userResults.append(card);
+  }
+}
+
+async function runUserSearch() {
+  const sessionId = adminSessionSelect.value;
+  const term = userSearchInput.value.trim();
+  if (!sessionId) {
+    setUserSearchStatus("Select an admin session first.", true);
+    return;
+  }
+  if (term.length < 2) {
+    setUserSearchStatus("Enter at least 2 characters.", true);
+    return;
+  }
+  userSearchButton.disabled = true;
+  userResults.replaceChildren();
+  setUserSearchStatus("Searching Salesforce users…");
+  try {
+    const users = await window.loginDeck.searchSalesforceUsers(sessionId, term);
+    renderUserResults(users);
+  } catch (error) {
+    setUserSearchStatus(error.message || "User search failed.", true);
+  } finally {
+    userSearchButton.disabled = false;
+  }
+}
+
+userSearchButton.addEventListener("click", runUserSearch);
+userSearchInput.addEventListener("keydown", event => {
+  if (event.key === "Enter") runUserSearch();
 });
 
 document.getElementById("refresh").addEventListener("click", renderSessions);

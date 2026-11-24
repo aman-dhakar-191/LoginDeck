@@ -21,6 +21,18 @@
       <p class="intro-copy">Use your everyday Edge profile when you want your existing sign-in, or launch a separate browser profile for each Salesforce user.</p>
     </section>
 
+    <section class="panel user-search-panel">
+      <div class="section-heading"><div><p class="eyebrow">SALESFORCE ADMIN</p><h3>Login As a user</h3></div><span class="step">QUICK ACCESS</span></div>
+      <p class="panel-description">Search your org's users from an authenticated admin session, then open Salesforce's standard Login action.</p>
+      <div class="user-search-controls">
+        <label class="field"><span>Admin session</span><select id="admin-session"><option value="">Select an isolated admin session</option></select></label>
+        <label class="field"><span>Find a user</span><input id="user-search" type="search" placeholder="Name, username or email"></label>
+        <button id="user-search-button" class="primary-button" type="button">Search users</button>
+      </div>
+      <p id="user-search-status" class="search-status" role="status">Open the admin session below and sign in before searching.</p>
+      <div id="user-results" class="user-results"></div>
+    </section>
+
     <section class="panel create-panel">
       <div class="section-heading"><div><p class="eyebrow">NEW SESSION</p><h3>Create a session</h3></div><span class="step">01</span></div>
       <form id="session-form">

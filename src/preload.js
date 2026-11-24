@@ -5,5 +5,7 @@ contextBridge.exposeInMainWorld("loginDeck", {
   saveSession: (session) => ipcRenderer.invoke("sessions:save", session),
   deleteSession: (id) => ipcRenderer.invoke("sessions:delete", id),
   launchSession: (id) => ipcRenderer.invoke("sessions:launch", id),
-  openExternal: (url) => ipcRenderer.invoke("app:openExternal", url)
+  openExternal: (url) => ipcRenderer.invoke("app:openExternal", url),
+  searchSalesforceUsers: (sessionId, term) => ipcRenderer.invoke("salesforce:searchUsers", { sessionId, term }),
+  openLoginAs: (sessionId, userId) => ipcRenderer.invoke("salesforce:openLoginAs", { sessionId, userId })
 });

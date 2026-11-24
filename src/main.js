@@ -149,6 +149,55 @@ ipcMain.handle("sessions:launch", async (_event, id) => {
   return { id, status: "launched" };
 });
 
+
+ipcMain.handle("salesforce:searchUsers", async (_event, { sessionId, term }) => {
+  if (!validId(sessionId)) throw new Error("Choose a valid Salesforce admin session.");
+  const query = String(term || "").trim().slice(0, 100);
+  if (query.length < 2) throw new Error("Enter at least 2 characters.");
+  const session = (await readSavedSessions()).find(item => item.id === sessionId);
+  if (!session) throw new Error("Saved admin session not found.");
+  if (session.profileMode === "personal") {
+    throw new Error("User search currently requires an active LoginDeck isolated session. Open the admin session in an isolated profile first.");
+  }
+  const active = activeSessions.get(sessionId);
+  if (!active) throw new Error("Open this admin session first, sign in to Salesforce, then search again.");
+
+  return active.page.evaluate(async (term) => {
+    const escaped = term.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    const versionsResponse = await fetch("/services/data/", { credentials: "include" });
+    if (!versionsResponse.ok) throw new Error("Salesforce API is unavailable. Check your admin login and API access.");
+    const versions = await versionsResponse.json();
+    const version = versions.map(item => Number(item.version)).filter(Number.isFinite).sort((a, b) => b - a)[0];
+    if (!version) throw new Error("Could not determine the Salesforce REST API version.");
+    const soql = "SELECT Id, Name, Username, Email, IsActive FROM User WHERE Name LIKE '%" + escaped + "%' OR Username LIKE '%" + escaped + "%' OR Email LIKE '%" + escaped + "%' ORDER BY Name LIMIT 30";
+    const response = await fetch("/services/data/v" + version.toFixed(1) + "/query/?q=" + encodeURIComponent(soql), { credentials: "include" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.[0]?.message || payload?.message || "Salesforce rejected the user search.");
+    return (payload.records || []).map(({ Id, Name, Username, Email, IsActive }) => ({ Id, Name, Username, Email, IsActive }));
+  }, query);
+});
+
+ipcMain.handle("salesforce:openLoginAs", async (_event, { sessionId, userId }) => {
+  if (!validId(sessionId)) throw new Error("Choose a valid Salesforce admin session.");
+  if (typeof userId !== "string" || !/^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/.test(userId)) {
+    throw new Error("Invalid Salesforce user ID.");
+  }
+  const session = (await readSavedSessions()).find(item => item.id === sessionId);
+  if (!session || session.profileMode === "personal") {
+    throw new Error("Select a LoginDeck isolated admin session.");
+  }
+  const active = activeSessions.get(sessionId);
+  if (!active) throw new Error("Open and sign in to the selected admin session first.");
+  const currentUrl = new URL(active.page.url());
+  if (!validSalesforceUrl(currentUrl.origin)) throw new Error("The selected session is not currently on a Salesforce page.");
+  const target = new URL("/lightning/setup/ManageUsers/page", currentUrl.origin);
+  target.searchParams.set("address", "/" + userId);
+  const page = await active.context.newPage();
+  await page.goto(target.toString(), { waitUntil: "domcontentloaded" });
+  await page.bringToFront();
+  return { status: "opened", url: target.toString() };
+});
+
 ipcMain.handle("app:openExternal", async (_event, url) => {
   if (typeof url !== "string" || !url.startsWith("https://")) return;
   await shell.openExternal(url);
