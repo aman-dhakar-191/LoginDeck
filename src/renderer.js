@@ -240,3 +240,6 @@ window.loginDeck.getAppVersion().then(version => {
 document.getElementById("refresh").addEventListener("click", renderSessions);
 syncProfileMode();
 renderSessions().catch(error => notify(error.message));
+
+// Refresh the live Salesforce sign-in indicator while LoginDeck is open.
+setInterval(() => renderSessions().catch(() => {}), 5000);
