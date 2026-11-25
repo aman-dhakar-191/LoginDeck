@@ -30,7 +30,7 @@ The extension uses the signed-in Salesforce tab's REST API to identify the curre
 
 ## Browser bridge behaviour and limits
 
-- Connections are held in the desktop app's memory and are cleared when LoginDeck exits. After restarting LoginDeck, reconnect each org using the new pairing code.
+- Connections are held in the desktop app's memory and are cleared when LoginDeck exits. After restarting LoginDeck, reconnect each org using the new pairing code. Reconnect after a browser restart if the original tab ID changes.
 - Each connection is tied to the browser tab and Salesforce org that were paired. Keep that original org tab open; closing it makes the connection go offline.
 - The extension's background service worker sends a heartbeat every 30 seconds. The side panel polls more frequently while open.
 - The bridge listens only on loopback (127.0.0.1); it is not exposed to the local network.
