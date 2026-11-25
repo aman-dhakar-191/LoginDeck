@@ -1,11 +1,22 @@
 const BRIDGE = "http://127.0.0.1:17321";
 
+async function configureSidePanel() {
+  try {
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  } catch (error) {
+    console.warn("LoginDeck could not configure toolbar side-panel behaviour:", error);
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
+  configureSidePanel();
   chrome.alarms.create("loginDeckHeartbeat", { periodInMinutes: 0.5 });
 });
 chrome.runtime.onStartup.addListener(() => {
+  configureSidePanel();
   chrome.alarms.create("loginDeckHeartbeat", { periodInMinutes: 0.5 });
 });
+configureSidePanel();
 
 async function post(path, body) {
   const response = await fetch(BRIDGE + path, {
