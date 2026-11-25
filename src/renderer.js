@@ -17,6 +17,8 @@ const updateDetail = document.getElementById("update-detail");
 const updateCheckButton = document.getElementById("update-check");
 const updateInstallButton = document.getElementById("update-install");
 const appVersionLabel = document.getElementById("app-version-label");
+const bridgePairingCode = document.getElementById("bridge-pairing-code");
+const bridgeStatus = document.getElementById("bridge-bridge-status");
 
 function notify(message) {
   toast.textContent = message;
@@ -50,16 +52,16 @@ async function renderSessions() {
   if (adminSessions.some(session => session.id === previousAdmin)) adminSessionSelect.value = previousAdmin;
   list.innerHTML = sessions.map(session => {
     const personal = session.profileMode === "personal";
+    const bridge = session.bridge === true;
     return `
       <article class="session-card">
         <div class="browser-icon">${session.browser === "edge" ? "e" : "C"}</div>
         <div class="session-info">
           <h4>${escapeHtml(session.name)}</h4>
-          <p>${personal ? `Personal ${session.browser === "edge" ? "Edge" : "Chrome"} profile · Existing browser data` : `${escapeHtml(session.browser === "edge" ? "Microsoft Edge" : "Google Chrome")} · Isolated profile`} · ${escapeHtml(session.url)}</p><p class="session-connection ${session.connection?.status === "authenticated" ? "connected" : ""}">${escapeHtml(session.connection?.label || "Status unavailable")}${session.connection?.user?.username ? " · " + escapeHtml(session.connection.user.username) : ""}</p>
+          <p>${bridge ? `${escapeHtml(session.browser === "edge" ? "Microsoft Edge" : "Google Chrome")} · Connected extension profile` : personal ? `Personal ${session.browser === "edge" ? "Edge" : "Chrome"} profile · Existing browser data` : `${escapeHtml(session.browser === "edge" ? "Microsoft Edge" : "Google Chrome")} · Isolated profile`} · ${escapeHtml(session.url)}</p><p class="session-connection ${session.connection?.status === "authenticated" ? "connected" : ""}">${escapeHtml(session.connection?.label || "Status unavailable")}${session.connection?.user?.username ? " · " + escapeHtml(session.connection.user.username) : ""}</p>
         </div>
         <div class="session-actions">
-          <button class="launch-button" data-launch="${escapeHtml(session.id)}">${personal ? `Open in ${session.browser === "edge" ? "Edge" : "Chrome"} ↗` : "Open isolated ↗"}</button>
-          <button class="delete-button" data-delete="${escapeHtml(session.id)}" title="Delete session">Delete</button>
+          ${bridge ? '<span class="connected-label">Extension connected</span>' : `<button class="launch-button" data-launch="${escapeHtml(session.id)}">${personal ? `Open in ${session.browser === "edge" ? "Edge" : "Chrome"} ↗` : "Open isolated ↗"}</button><button class="delete-button" data-delete="${escapeHtml(session.id)}" title="Delete session">Delete</button>`}
         </div>
       </article>
     `;
@@ -239,7 +241,15 @@ window.loginDeck.getAppVersion().then(version => {
 }).catch(() => {});
 document.getElementById("refresh").addEventListener("click", renderSessions);
 syncProfileMode();
+window.loginDeck.getBridgeInfo().then(info => { bridgePairingCode.textContent = info.pairingCode; }).catch(() => { bridgeStatus.textContent = "Local bridge unavailable"; });
 renderSessions().catch(error => notify(error.message));
 
 // Refresh the live Salesforce sign-in indicator while LoginDeck is open.
-setInterval(() => renderSessions().catch(() => {}), 5000);
+setInterval(async () => {
+  try {
+    const sessions = await window.loginDeck.listSessions();
+    const connected = sessions.filter(session => session.bridge && session.connection?.status === "authenticated").length;
+    bridgeStatus.textContent = connected ? connected + " browser org connection(s) active" : "Waiting for browser connection";
+    await renderSessions();
+  } catch {}
+}, 5000);

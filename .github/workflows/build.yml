@@ -22,13 +22,27 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Validate JavaScript and extension manifest
+        shell: pwsh
+        run: |
+          node --check src/main.js
+          node --check src/preload.js
+          node --check src/renderer.js
+          node --check extension/sidepanel.js
+          node --check extension/background.js
+          node -e "JSON.parse(require('fs').readFileSync('extension/manifest.json', 'utf8'))"
       - name: Build Windows installer
         run: npm run dist
+      - name: Package browser extension
+        shell: pwsh
+        run: Compress-Archive -Path extension\* -DestinationPath release\LoginDeck-Extension.zip -Force
       - name: Upload installer artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: LoginDeck-Windows-Installer
-          path: release/*.exe
+          path: |
+            release/*.exe
+            release/*.zip
           if-no-files-found: error
           retention-days: 14

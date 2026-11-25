@@ -7,3 +7,9 @@
 
 .session-connection { margin-top: 5px; color: #8da2c5; font-size: 12px; }
 .session-connection.connected { color: #55d6a0; }
+
+.bridge-pairing { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 20px; border:1px solid #293b60; border-radius:14px; background:rgba(7,14,31,.55); }
+.bridge-pairing strong { font-size:28px; letter-spacing:7px; color:#fff; font-variant-numeric:tabular-nums; }
+.bridge-pairing span { color:#91a8d0; font-size:13px; }
+.session-connection.connected { color:#55d6a0; }
+.session-actions .connected-label { color:#55d6a0; font-size:12px; padding:10px; }

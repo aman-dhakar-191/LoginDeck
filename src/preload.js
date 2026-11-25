@@ -8,6 +8,7 @@ function subscribe(channel, callback) {
 
 contextBridge.exposeInMainWorld("loginDeck", {
   listSessions: () => ipcRenderer.invoke("sessions:list"),
+  getBridgeInfo: () => ipcRenderer.invoke("bridge:info"),
   saveSession: (session) => ipcRenderer.invoke("sessions:save", session),
   deleteSession: (id) => ipcRenderer.invoke("sessions:delete", id),
   launchSession: (id) => ipcRenderer.invoke("sessions:launch", id),

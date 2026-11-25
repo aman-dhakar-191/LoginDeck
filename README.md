@@ -6,29 +6,35 @@ LoginDeck is a Windows desktop session manager plus a companion Salesforce brows
 
 LoginDeck supports two browser profile modes:
 
-- **Personal Edge profile** opens Salesforce through the Windows Microsoft Edge protocol handler. Edge uses its normal profile selection and handles existing sign-ins, cookies and saved passwords. LoginDeck does not read, export, copy or store browser credentials. The Edge profile that opens is controlled by Edge/Windows (typically the default or last-used Edge profile).
+- **Personal browser profile** opens Salesforce in the selected installed browser's existing profile. LoginDeck does not read, export, copy or store browser credentials. Use the companion extension to connect that authenticated org to the desktop app.
 - **LoginDeck isolated profile** launches Chrome or Edge with a dedicated user-data directory for that saved session. Cookies and site storage are separate for each LoginDeck session; sign in once in each isolated profile.
 
-Personal Edge mode is currently Windows-only and supports Microsoft Edge. It opens a tab/window in Edge but does not give LoginDeck control over that personal browser window. Deleting a Personal Edge session removes only its LoginDeck shortcut/configuration; it does not touch Edge data. Existing sessions without a `profileMode` setting continue to launch as isolated profiles.
+The browser extension is the supported way to connect existing Edge and Chrome profiles to LoginDeck's admin-session selector. Existing sessions without a `profileMode` setting continue to launch as isolated profiles.
 
 Download the Windows installer from the GitHub Releases page.
 
-## Companion extension (early preview)
+## Companion extension
 
-The unpacked Manifest V3 extension is in the `extension/` folder.
+The unpacked Manifest V3 extension is in the `extension/` folder. The release ZIP contains the same folder ready for unpacked installation.
 
-1. Open `chrome://extensions` or `edge://extensions`.
-2. Enable Developer mode.
-3. Choose Load unpacked and select the repository's extension folder.
-4. Open a Salesforce org tab, then click the LoginDeck extension icon to open its side panel.
-5. Search by user name, username or email.
-6. Choose Open Login As in Setup, then use Salesforce's standard Login action on the user page.
+1. Install LoginDeck desktop and keep it running.
+2. Open `edge://extensions` or `chrome://extensions`.
+3. Enable Developer mode and choose **Load unpacked**.
+4. Select the extracted `extension/` folder (or the repository's `extension/` folder).
+5. Open a signed-in Salesforce Lightning org tab and open the LoginDeck extension side panel.
+6. Copy the six-digit pairing code from LoginDeck's **Browser Connection** panel into the extension and select **Connect**.
 
-The extension uses the currently signed-in Salesforce page to query the REST API. It does not collect or export session cookies. User search requires Salesforce API access and appropriate visibility/permissions.
+The extension reports the Salesforce org and authenticated admin identity to the desktop app over a loopback-only local HTTP bridge on `127.0.0.1:17321`. The bridge uses a desktop pairing code and a per-connection random token. Multiple Edge and Chrome org tabs can be connected simultaneously. The extension sends periodic heartbeats and services LoginDeck user-search and open-Setup commands.
 
-## Current integration boundary
+The extension uses the signed-in Salesforce tab's REST API to identify the current user and search users. It does not collect or export session cookies, passwords or Salesforce access tokens. User search requires Salesforce API access and appropriate user visibility/permissions.
 
-The extension's user search and Setup navigation are an early preview. It does not yet hand the selected user into a separate LoginDeck browser profile. The Salesforce Login action opened in Setup will operate in the browser profile where the extension is installed. A secure extension-to-desktop handoff remains a follow-up milestone.
+## Browser bridge behaviour and limits
+
+- Connections are held in the desktop app's memory and are cleared when LoginDeck exits. After restarting LoginDeck, reconnect each org using the new pairing code. Reconnect after a browser restart if the original tab ID changes. Reconnect after a browser restart if the original tab ID changes.
+- Each connection is tied to the browser tab and Salesforce org that were paired. Keep that original org tab open; closing it makes the connection go offline.
+- The extension's background service worker sends a heartbeat every 30 seconds. The side panel polls more frequently while open.
+- The bridge listens only on loopback (127.0.0.1); it is not exposed to the local network.
+- Login As opens the standard Salesforce Setup user page in the same browser profile. The administrator still completes Salesforce's standard Login action; the extension does not bypass Salesforce permissions or login-access settings.
 
 ## CI and releases
 
