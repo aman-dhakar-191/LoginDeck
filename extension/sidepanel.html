@@ -1,1 +1,24 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>LoginDeck</title><link rel="stylesheet" href="sidepanel.css"></head><body><header><div class="mark">LD</div><div><h1>LoginDeck</h1><p>Salesforce user finder</p></div><span class="live">ORG</span></header><main><div class="org" id="org-label">Checking Salesforce tab…</div><label for="search">Find a user</label><div class="search-row"><input id="search" type="search" placeholder="Name, username or email" autocomplete="off"><button id="search-button">Search</button></div><p class="hint">Searches active Salesforce users in the current org using your signed-in session.</p><div id="status" role="status">Open a Salesforce org tab to begin.</div><section id="results" aria-live="polite"></section><div class="footnote"><strong>Login As</strong><p>Choose a user and open their Salesforce Setup page. Use Salesforce’s own <b>Login</b> action there; Salesforce permissions and login-access settings still apply.</p><p class="muted">The extension does not collect or export session cookies.</p></div></main><script src="sidepanel.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LoginDeck</title><link rel="stylesheet" href="sidepanel.css"></head>
+<body>
+<header><div class="mark">LD</div><div><h1>LoginDeck</h1><p>Salesforce browser connection</p></div><span class="live">LOCAL</span></header>
+<main>
+  <div class="org" id="org-label">Checking Salesforce tab…</div>
+  <section class="connect-card">
+    <h2>Connect this org</h2>
+    <p>Open LoginDeck desktop and enter the six-digit pairing code shown in its Browser Connection panel.</p>
+    <label for="pairing-code">LoginDeck pairing code</label>
+    <div class="connect-row"><input id="pairing-code" inputmode="numeric" maxlength="6" placeholder="000000"><button id="connect-button">Connect</button></div>
+    <div id="connection-status" role="status">Not connected</div>
+    <button id="disconnect-button" class="secondary" hidden>Disconnect org</button>
+  </section>
+  <label for="search">Find a user</label>
+  <div class="search-row"><input id="search" type="search" placeholder="Name, username or email" autocomplete="off"><button id="search-button">Search</button></div>
+  <p class="hint">Searches users in this signed-in Salesforce org. LoginDeck can also send searches to this browser connection.</p>
+  <div id="status" role="status">Connect this org to LoginDeck to begin.</div>
+  <section id="results" aria-live="polite"></section>
+  <div class="footnote"><strong>Security</strong><p>Only org URL, browser label and the signed-in user's basic identity are shared with LoginDeck. Cookies, passwords and Salesforce access tokens stay in the browser.</p></div>
+</main>
+<script src="sidepanel.js"></script>
+</body></html>
