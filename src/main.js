@@ -254,12 +254,14 @@ async function inspectSessionStatus(session) {
       if (/\/login|login\.salesforce\.com|test\.salesforce\.com\/\?/.test(current)) {
         return { authenticated: false };
       }
-      const versionsResponse = await fetch("/services/data/", { credentials: "include" });
+      const apiOrigin = location.hostname.endsWith(".lightning.force.com") ? location.origin.replace(".lightning.force.com", ".my.salesforce.com") : location.origin;
+
+      const versionsResponse = await fetch(apiOrigin + "/services/data/", { credentials: "include" });
       if (!versionsResponse.ok) return { authenticated: false };
       const versions = await versionsResponse.json();
       const version = versions.map(item => Number(item.version)).filter(Number.isFinite).sort((a, b) => b - a)[0];
       if (!version) return { authenticated: false };
-      const response = await fetch("/services/data/v" + version.toFixed(1) + "/chatter/users/me", { credentials: "include" });
+      const response = await fetch(apiOrigin+"/services/data/v + version.toFixed(1) + "/chatter/users/me", { credentials: "include" });
       if (!response.ok) return { authenticated: false };
       const user = await response.json();
       return {
@@ -427,13 +429,15 @@ ipcMain.handle("salesforce:searchUsers", async (_event, { sessionId, term }) => 
 
   return active.page.evaluate(async (term) => {
     const escaped = term.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-    const versionsResponse = await fetch("/services/data/", { credentials: "include" });
+    const apiOrigin = location.hostname.endsWith(".lightning.force.com") ? location.origin.replace(".lightning.force.com", ".my.salesforce.com") : location.origin;
+
+    const versionsResponse = await fetch(apiOrigin + "/services/data/", { credentials: "include" });
     if (!versionsResponse.ok) throw new Error("Salesforce API is unavailable. Check your admin login and API access.");
     const versions = await versionsResponse.json();
     const version = versions.map(item => Number(item.version)).filter(Number.isFinite).sort((a, b) => b - a)[0];
     if (!version) throw new Error("Could not determine the Salesforce REST API version.");
     const soql = "SELECT Id, Name, Username, Email, IsActive FROM User WHERE Name LIKE '%" + escaped + "%' OR Username LIKE '%" + escaped + "%' OR Email LIKE '%" + escaped + "%' ORDER BY Name LIMIT 30";
-    const response = await fetch("/services/data/v" + version.toFixed(1) + "/query/?q=" + encodeURIComponent(soql), { credentials: "include" });
+    const response = await fetch(apiOrigin+"/services/data/v + version.toFixed(1) + "/query/?q=" + encodeURIComponent(soql), { credentials: "include" });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload?.[0]?.message || payload?.message || "Salesforce rejected the user search.");
     return (payload.records || []).map(({ Id, Name, Username, Email, IsActive }) => ({ Id, Name, Username, Email, IsActive }));
