@@ -83,6 +83,9 @@ jobs:
         run: npm install
       - name: Build Windows installer and updater metadata
         run: npm run dist
+      - name: Package browser extension
+        shell: pwsh
+        run: Compress-Archive -Path extension\* -DestinationPath "release\LoginDeck-Extension-v${{ steps.version.outputs.version }}.zip" -Force
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
