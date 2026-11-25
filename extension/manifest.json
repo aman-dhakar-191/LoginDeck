@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LoginDeck for Salesforce",
-  "version": "0.2.0",
+  "version": "0.3.3",
   "description": "Connect authenticated Salesforce orgs in Edge or Chrome to LoginDeck desktop.",
   "permissions": [
     "activeTab",
