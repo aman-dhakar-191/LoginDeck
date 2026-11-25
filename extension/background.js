@@ -28,61 +28,79 @@ async function post(path, body) {
   return response.json();
 }
 
-async function executeInTab(tabId, func, args = []) {
-  const result = await chrome.scripting.executeScript({
-    target: { tabId },
-    world: "MAIN",
-    func,
-    args
-  });
-  return result?.[0]?.result;
+// Salesforce REST calls run in the extension service worker, not the Lightning
+// page. Host permissions allow this cross-origin request without page CORS.
+function salesforceApiOrigin(tabUrl) {
+  const url = new URL(tabUrl);
+  if (url.protocol !== "https:") throw new Error("Salesforce connection requires HTTPS.");
+  if (url.hostname.endsWith(".lightning.force.com")) {
+    return url.origin.replace(".lightning.force.com", ".my.salesforce.com");
+  }
+  if (url.hostname.endsWith(".my.salesforce.com")) return url.origin;
+  throw new Error("Open an authenticated Salesforce My Domain or Lightning tab.");
 }
 
-async function currentUser(tabId) {
-  return executeInTab(tabId, async () => {
-    const apiOrigin = location.hostname.endsWith(".lightning.force.com")
-      ? location.origin.replace(".lightning.force.com", ".my.salesforce.com")
-      : location.origin;
-    const versionsResponse = await fetch(apiOrigin + "/services/data/", { credentials: "include" });
-    if (!versionsResponse.ok) throw new Error("Salesforce session unavailable.");
-    const versions = await versionsResponse.json();
-    const version = versions.map(item => Number(item.version)).filter(Number.isFinite).sort((a, b) => b - a)[0];
-    if (!version) throw new Error("Salesforce API version unavailable.");
-    const response = await fetch(apiOrigin + "/services/data/v" + version.toFixed(1) + "/chatter/users/me", { credentials: "include" });
-    const user = await response.json().catch(() => ({}));
-    if (!response.ok || !(user.id || user.Id) || !(user.username || user.Username)) {
-      throw new Error("Admin identity unavailable.");
-    }
-    return {
-      id: user.id || user.Id,
-      name: user.name || user.Name || "",
-      username: user.username || user.Username,
-      email: user.email || user.Email || ""
-    };
+async function salesforceRequest(tabUrl, path) {
+  const origin = salesforceApiOrigin(tabUrl);
+  const response = await fetch(origin + path, {
+    method: "GET",
+    credentials: "include",
+    headers: { "Accept": "application/json" },
+    cache: "no-store"
   });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = Array.isArray(payload) ? payload.map(item => item.message).filter(Boolean).join("; ") : payload.message;
+    if (response.status === 401 || response.status === 302) {
+      throw new Error("Salesforce session is not authenticated for its My Domain API. Reopen the org and sign in.");
+    }
+    throw new Error(message || `Salesforce API request failed (HTTP ${response.status}).`);
+  }
+  return payload;
+}
+
+async function salesforceApiVersion(tabUrl) {
+  const versions = await salesforceRequest(tabUrl, "/services/data/");
+  const version = versions.map(item => Number(item.version)).filter(Number.isFinite).sort((a, b) => b - a)[0];
+  if (!version) throw new Error("Salesforce did not return an available REST API version.");
+  return version.toFixed(1);
+}
+
+async function getSalesforceUser(tabId) {
+  const tab = await chrome.tabs.get(tabId);
+  if (!tab.url) throw new Error("The connected Salesforce tab is unavailable.");
+  const version = await salesforceApiVersion(tab.url);
+  const user = await salesforceRequest(tab.url, `/services/data/v${version}/chatter/users/me`);
+  const id = user.id || user.Id;
+  const username = user.username || user.Username;
+  if (!id || !username) throw new Error("Salesforce responded, but did not provide the signed-in user's identity.");
+  return {
+    id,
+    name: user.name || user.Name || "",
+    username,
+    email: user.email || user.Email || ""
+  };
+}
+
+async function searchSalesforceUsers(tabId, term) {
+  const tab = await chrome.tabs.get(tabId);
+  if (!tab.url) throw new Error("The connected Salesforce tab is unavailable.");
+  const query = String(term || "").trim();
+  if (query.length < 2) throw new Error("Enter at least 2 characters.");
+  const escaped = query.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  const version = await salesforceApiVersion(tab.url);
+  const soql = "SELECT Id, Name, Username, Email, IsActive FROM User WHERE Name LIKE '%" + escaped +
+    "%' OR Username LIKE '%" + escaped + "%' OR Email LIKE '%" + escaped + "%' ORDER BY Name LIMIT 30";
+  const result = await salesforceRequest(tab.url,
+    `/services/data/v${version}/query/?q=${encodeURIComponent(soql)}`);
+  return result.records || [];
 }
 
 async function processCommand(tabId, connection, command) {
   try {
     let result;
     if (command.type === "searchUsers") {
-      result = await executeInTab(tabId, async term => {
-        const escaped = term.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-        const apiOrigin = location.hostname.endsWith(".lightning.force.com")
-          ? location.origin.replace(".lightning.force.com", ".my.salesforce.com")
-          : location.origin;
-        const versionsResponse = await fetch(apiOrigin + "/services/data/", { credentials: "include" });
-        if (!versionsResponse.ok) throw new Error("Salesforce API unavailable.");
-        const versions = await versionsResponse.json();
-        const version = versions.map(item => Number(item.version)).filter(Number.isFinite).sort((a, b) => b - a)[0];
-        if (!version) throw new Error("Salesforce API version unavailable.");
-        const soql = "SELECT Id, Name, Username, Email, IsActive FROM User WHERE Name LIKE '%" + escaped +
-          "%' OR Username LIKE '%" + escaped + "%' OR Email LIKE '%" + escaped + "%' ORDER BY Name LIMIT 30";
-        const response = await fetch(apiOrigin + "/services/data/v" + version.toFixed(1) + "/query/?q=" + encodeURIComponent(soql), { credentials: "include" });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload?.[0]?.message || payload?.message || "Salesforce user search failed.");
-        return payload.records || [];
-      }, [command.term]);
+      result = await searchSalesforceUsers(tabId, command.term);
     } else if (command.type === "openLoginAs") {
       const tab = await chrome.tabs.get(tabId);
       const url = new URL("/lightning/setup/ManageUsers/page", new URL(tab.url).origin);
@@ -107,7 +125,7 @@ async function tick() {
       if (!tab.url || new URL(tab.url).origin !== connection.orgOrigin) {
         throw new Error("Connected Salesforce tab is no longer available.");
       }
-      const user = await currentUser(connection.tabId);
+      const user = await getSalesforceUser(connection.tabId);
       await post("/api/heartbeat", { ...connection, user });
       const query = BRIDGE + "/api/next?connectionId=" + encodeURIComponent(connection.connectionId) +
         "&token=" + encodeURIComponent(connection.token);
@@ -125,9 +143,22 @@ chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === "loginDeckHeartbeat") tick();
 });
 chrome.runtime.onStartup.addListener(() => tick());
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "loginDeckWake") {
     tick().then(() => sendResponse({ ok: true }));
+    return true;
+  }
+  if (message?.type === "loginDeckSalesforceApi") {
+    (async () => {
+      const tabId = Number(message.tabId);
+      const tab = await chrome.tabs.get(tabId);
+      if (!tab.url || !salesforceApiOrigin(tab.url)) throw new Error("Select an authenticated Salesforce org tab.");
+      if (message.action === "getCurrentUser") return getSalesforceUser(tabId);
+      if (message.action === "searchUsers") return searchSalesforceUsers(tabId, message.term);
+      throw new Error("Unsupported Salesforce API action.");
+    })().then(data => sendResponse({ ok: true, data }))
+      .catch(error => sendResponse({ ok: false, error: error.message }));
     return true;
   }
 });
