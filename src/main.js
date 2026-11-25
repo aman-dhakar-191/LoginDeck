@@ -5,10 +5,16 @@ const path = require("node:path");
 const fs = require("node:fs/promises");
 const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
+const http = require("node:http");
 
 let mainWindow;
 let updateCheckStarted = false;
 const activeSessions = new Map();
+const bridgeConnections = new Map();
+const pendingBridgeCommands = new Map();
+const BRIDGE_PORT = 17321;
+const bridgePairingCode = String(crypto.randomInt(100000, 1000000));
+let bridgeServer;
 const sessionsFile = () => path.join(app.getPath("userData"), "sessions.json");
 const profilesDir = () => path.join(app.getPath("userData"), "browser-profiles");
 
@@ -47,6 +53,153 @@ function validId(id) {
   return typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 }
 
+
+function sendBridgeJson(response, status, payload) {
+  response.writeHead(status, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type"
+  });
+  response.end(JSON.stringify(payload));
+}
+
+function readBridgeJson(request) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    request.on("data", chunk => {
+      body += chunk;
+      if (body.length > 65536) {
+        reject(new Error("Request too large."));
+        request.destroy();
+      }
+    });
+    request.on("end", () => {
+      try { resolve(body ? JSON.parse(body) : {}); }
+      catch { reject(new Error("Invalid JSON.")); }
+    });
+    request.on("error", reject);
+  });
+}
+
+function bridgeConnectionFor(id, token) {
+  const connection = bridgeConnections.get(id);
+  if (!connection || connection.token !== token || Date.now() - connection.lastSeen > 120000) return null;
+  return connection;
+}
+
+function sendBridgeCommand(connection, type, payload = {}) {
+  if (Date.now() - connection.lastSeen > 120000) {
+    return Promise.reject(new Error("Browser extension is offline. Reopen its LoginDeck panel and reconnect."));
+  }
+  const commandId = crypto.randomUUID();
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pendingBridgeCommands.delete(commandId);
+      reject(new Error("The browser extension did not respond. Keep its LoginDeck panel open and retry."));
+    }, 45000);
+    pendingBridgeCommands.set(commandId, { resolve, reject, timeout, connectionId: connection.id });
+    connection.commands.push({ id: commandId, type, ...payload });
+  });
+}
+
+function startBrowserBridge() {
+  if (bridgeServer) return;
+  let failedPairingAttempts = 0;
+  let pairingLockedUntil = 0;
+  bridgeServer = http.createServer(async (request, response) => {
+    const url = new URL(request.url, "http://127.0.0.1");
+    if (request.method === "OPTIONS") {
+      response.writeHead(204, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+      });
+      return response.end();
+    }
+    if (request.method === "GET" && url.pathname === "/health") {
+      return sendBridgeJson(response, 200, { app: "LoginDeck", version: app.getVersion() });
+    }
+    try {
+      if (request.method === "POST" && url.pathname === "/api/connect") {
+        if (Date.now() < pairingLockedUntil) return sendBridgeJson(response, 429, { error: "Too many pairing attempts. Wait one minute." });
+        const body = await readBridgeJson(request);
+        if (body.code !== bridgePairingCode) {
+          failedPairingAttempts++;
+          if (failedPairingAttempts >= 10) { failedPairingAttempts = 0; pairingLockedUntil = Date.now() + 60000; }
+          return sendBridgeJson(response, 401, { error: "Pairing code is incorrect." });
+        }
+        failedPairingAttempts = 0;
+        if (!["edge", "chrome"].includes(body.browser) || !validSalesforceUrl(body.orgUrl)) {
+          return sendBridgeJson(response, 400, { error: "Unsupported browser or Salesforce org URL." });
+        }
+        if (!body.user?.id || !body.user?.username) return sendBridgeJson(response, 400, { error: "Could not identify the signed-in Salesforce user." });
+        const id = crypto.randomUUID();
+        const token = crypto.randomBytes(32).toString("hex");
+        const orgUrl = new URL(body.orgUrl);
+        const connection = {
+          id, token, browser: body.browser,
+          profileName: String(body.profileName || "Browser profile").slice(0, 80),
+          tabId: Number(body.tabId), orgUrl: orgUrl.origin,
+          orgName: String(body.orgName || orgUrl.hostname).slice(0, 120),
+          user: {
+            id: String(body.user.id), name: String(body.user.name || "").slice(0, 120),
+            username: String(body.user.username).slice(0, 200), email: String(body.user.email || "").slice(0, 200)
+          },
+          lastSeen: Date.now(), commands: []
+        };
+        bridgeConnections.set(id, connection);
+        return sendBridgeJson(response, 200, { connectionId: id, token, status: "connected" });
+      }
+      if (request.method === "POST" && url.pathname === "/api/heartbeat") {
+        const body = await readBridgeJson(request);
+        const connection = bridgeConnectionFor(body.connectionId, body.token);
+        if (!connection) return sendBridgeJson(response, 401, { error: "Connection expired. Reconnect this org." });
+        connection.lastSeen = Date.now();
+        if (body.user?.id && body.user?.username) {
+          connection.user = {
+            id: String(body.user.id), name: String(body.user.name || "").slice(0, 120),
+            username: String(body.user.username).slice(0, 200), email: String(body.user.email || "").slice(0, 200)
+          };
+        }
+        return sendBridgeJson(response, 200, { status: "connected" });
+      }
+      if (request.method === "GET" && url.pathname === "/api/next") {
+        const connection = bridgeConnectionFor(url.searchParams.get("connectionId"), url.searchParams.get("token"));
+        if (!connection) return sendBridgeJson(response, 401, { error: "Connection expired." });
+        connection.lastSeen = Date.now();
+        return sendBridgeJson(response, 200, { command: connection.commands.shift() || null });
+      }
+      if (request.method === "POST" && url.pathname === "/api/result") {
+        const body = await readBridgeJson(request);
+        const connection = bridgeConnectionFor(body.connectionId, body.token);
+        if (!connection) return sendBridgeJson(response, 401, { error: "Connection expired." });
+        connection.lastSeen = Date.now();
+        const pending = pendingBridgeCommands.get(body.commandId);
+        if (pending && pending.connectionId === connection.id) {
+          clearTimeout(pending.timeout);
+          pendingBridgeCommands.delete(body.commandId);
+          if (body.error) pending.reject(new Error(String(body.error).slice(0, 500)));
+          else pending.resolve(body.result);
+        }
+        return sendBridgeJson(response, 200, { ok: true });
+      }
+      if (request.method === "POST" && url.pathname === "/api/disconnect") {
+        const body = await readBridgeJson(request);
+        const connection = bridgeConnections.get(body.connectionId);
+        if (!connection || connection.token !== body.token) return sendBridgeJson(response, 401, { error: "Invalid connection." });
+        bridgeConnections.delete(connection.id);
+        return sendBridgeJson(response, 200, { status: "disconnected" });
+      }
+      return sendBridgeJson(response, 404, { error: "Not found." });
+    } catch (error) {
+      return sendBridgeJson(response, 400, { error: error.message || "Invalid request." });
+    }
+  });
+  bridgeServer.on("error", error => console.error("LoginDeck browser bridge error:", error));
+  bridgeServer.listen(BRIDGE_PORT, "127.0.0.1");
+}
+
 async function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1040,
@@ -70,6 +223,7 @@ function sendUpdateStatus(status, details = {}) {
 }
 
 ipcMain.handle("updater:version", async () => app.getVersion());
+ipcMain.handle("bridge:info", async () => ({ port: BRIDGE_PORT, pairingCode: bridgePairingCode }));
 ipcMain.handle("updater:check", async () => {
   if (!app.isPackaged) return { status: "development" };
   try {
@@ -129,10 +283,27 @@ async function inspectSessionStatus(session) {
 
 ipcMain.handle("sessions:list", async () => {
   const sessions = await readSavedSessions();
-  return Promise.all(sessions.map(async session => ({
+  const saved = await Promise.all(sessions.map(async session => ({
     ...session,
     connection: await inspectSessionStatus(session)
   })));
+  const connected = [...bridgeConnections.values()].map(connection => ({
+    id: "bridge:" + connection.id,
+    name: connection.orgName + " · " + connection.browser,
+    url: connection.orgUrl,
+    browser: connection.browser,
+    profileMode: "connected",
+    bridge: true,
+    connection: {
+      status: Date.now() - connection.lastSeen <= 120000 ? "authenticated" : "disconnected",
+      label: "Connected via extension · " + connection.user.name,
+      user: connection.user,
+      orgName: connection.orgName,
+      profileName: connection.profileName,
+      lastSeen: connection.lastSeen
+    }
+  }));
+  return [...saved, ...connected];
 });
 
 ipcMain.handle("sessions:save", async (_event, input) => {
@@ -251,6 +422,11 @@ ipcMain.handle("salesforce:searchUsers", async (_event, { sessionId, term }) => 
     if (!connection || Date.now() - connection.lastSeen > 120000) throw new Error("Browser extension is disconnected. Reconnect it first.");
     return dispatchBridgeCommand(connection, "searchUsers", { term: query });
   }
+  if (String(sessionId).startsWith("bridge:")) {
+    const connection = bridgeConnections.get(String(sessionId).slice(7));
+    if (!connection || Date.now() - connection.lastSeen > 120000) throw new Error("Browser extension is disconnected. Reconnect it first.");
+    return sendBridgeCommand(connection, "searchUsers", { term: query });
+  }
   const session = (await readSavedSessions()).find(item => item.id === sessionId);
   if (!session) throw new Error("Saved admin session not found.");
   if (session.profileMode === "personal") {
@@ -289,6 +465,11 @@ ipcMain.handle("salesforce:openLoginAs", async (_event, { sessionId, userId }) =
     if (!connection || Date.now() - connection.lastSeen > 120000) throw new Error("Browser extension is disconnected. Reconnect it first.");
     return dispatchBridgeCommand(connection, "openLoginAs", { userId });
   }
+  if (String(sessionId).startsWith("bridge:")) {
+    const connection = bridgeConnections.get(String(sessionId).slice(7));
+    if (!connection || Date.now() - connection.lastSeen > 120000) throw new Error("Browser extension is disconnected. Reconnect it first.");
+    return sendBridgeCommand(connection, "openLoginAs", { userId });
+  }
   const session = (await readSavedSessions()).find(item => item.id === sessionId);
   if (!session || session.profileMode === "personal") {
     throw new Error("Select a connected browser or LoginDeck isolated admin session.");
@@ -311,6 +492,7 @@ ipcMain.handle("app:openExternal", async (_event, url) => {
 });
 
 app.whenReady().then(async () => {
+  startBrowserBridge();
   await createMainWindow();
 
   if (app.isPackaged && !updateCheckStarted) {
@@ -333,6 +515,8 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) await createMainWindow();
   });
 });
+
+app.on("will-quit", () => { if (bridgeServer) bridgeServer.close(); });
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
