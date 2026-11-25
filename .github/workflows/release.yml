@@ -16,6 +16,10 @@ on:
   push:
     tags:
       - "v*"
+  workflow_run:
+    workflows: ["Build LoginDeck"]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: write
@@ -27,6 +31,10 @@ concurrency:
 jobs:
   release:
     name: Build and publish GitHub Release
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.actor != 'github-actions[bot]') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_commit.message, 'release:'))
     runs-on: windows-latest
     steps:
       - name: Checkout latest main or requested tag
@@ -68,13 +76,24 @@ jobs:
             git push origin "v$version"
             "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             "tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } elseif ("${{ github.event_name }}" -eq "workflow_run") {
+            $package = Get-Content package.json | ConvertFrom-Json
+            $version = $package.version
+            if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid package version: $version" }
+            $tag = "v$version"
+            git fetch --tags
+            if (git tag --list $tag) { throw "Release tag $tag already exists." }
+            git tag $tag
+            git push origin $tag
+            "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           } else {
             $tag = "${{ github.ref_name }}"
             if ($tag -notmatch '^v(\d+)\.(\d+)\.(\d+)$') { throw "Invalid release tag: $tag" }
             $version = $tag.Substring(1)
             $package = Get-Content package.json | ConvertFrom-Json
             if ($package.version -ne $version) {
-              throw "Tag $tag does not match package.json version $($package.version). Create releases from the Release workflow instead."
+              throw "Tag $tag does not match package.json version $($package.version)."
             }
             "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -93,5 +112,5 @@ jobs:
           target_commitish: main
           name: LoginDeck ${{ steps.version.outputs.tag }}
           body: ${{ inputs.release_notes }}
-          generate_release_notes: ${{ github.event_name == 'push' || inputs.release_notes == '' }}
+          generate_release_notes: ${{ inputs.release_notes == '' }}
           files: release/*
