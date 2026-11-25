@@ -238,7 +238,7 @@ ipcMain.handle("sessions:launch", async (_event, id) => {
 
 
 ipcMain.handle("salesforce:searchUsers", async (_event, { sessionId, term }) => {
-  if (!validId(sessionId)) throw new Error("Choose a valid Salesforce admin session.");
+  if (!String(sessionId || "").startsWith("bridge:") && !validId(sessionId)) throw new Error("Choose a valid Salesforce admin session.");
   const query = String(term || "").trim().slice(0, 100);
   if (query.length < 2) throw new Error("Enter at least 2 characters.");
   const session = (await readSavedSessions()).find(item => item.id === sessionId);
@@ -265,7 +265,7 @@ ipcMain.handle("salesforce:searchUsers", async (_event, { sessionId, term }) => 
 });
 
 ipcMain.handle("salesforce:openLoginAs", async (_event, { sessionId, userId }) => {
-  if (!validId(sessionId)) throw new Error("Choose a valid Salesforce admin session.");
+  if (!String(sessionId || "").startsWith("bridge:") && !validId(sessionId)) throw new Error("Choose a valid Salesforce admin session.");
   if (typeof userId !== "string" || !/^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/.test(userId)) {
     throw new Error("Invalid Salesforce user ID.");
   }
