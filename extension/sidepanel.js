@@ -29,38 +29,16 @@ async function getSalesforceTab() {
   if (!tab?.id || !tab.url) throw new Error("Select a Salesforce tab first.");
   const url = new URL(tab.url);
   const supported = url.protocol === "https:" &&
-    (url.hostname.endsWith(".my.salesforce.com") || url.hostname.endsWith(".lightning.force.com") ||
-     url.hostname === "login.salesforce.com" || url.hostname === "test.salesforce.com");
-  if (!supported) throw new Error("The active tab is not a supported Salesforce org page.");
+    (url.hostname.endsWith(".my.salesforce.com") || url.hostname.endsWith(".lightning.force.com"));
+  if (!supported) throw new Error("Open an authenticated Salesforce My Domain or Lightning org tab.");
   return { tab, url };
 }
-async function runInSalesforce(func, args = []) {
-  if (!activeTab?.id) throw new Error("No Salesforce tab is connected.");
-  const result = await chrome.scripting.executeScript({
-    target: { tabId: activeTab.id }, world: "MAIN", func, args
+async function salesforceApi(action, tabId, term) {
+  const response = await chrome.runtime.sendMessage({
+    type: "loginDeckSalesforceApi", action, tabId, term
   });
-  return result?.[0]?.result;
-}
-async function getCurrentUser() {
-  return runInSalesforce(async () => {
-    const apiOrigin = location.hostname.endsWith(".lightning.force.com")
-      ? location.origin.replace(".lightning.force.com", ".my.salesforce.com")
-      : location.origin;
-    const versionsResponse = await fetch(apiOrigin + "/services/data/", { credentials: "include" });
-    if (!versionsResponse.ok) throw new Error("Salesforce API is unavailable. Sign in and check API access.");
-    const versions = await versionsResponse.json();
-    const version = versions.map(item => Number(item.version)).filter(Number.isFinite).sort((a, b) => b - a)[0];
-    if (!version) throw new Error("Could not determine Salesforce API version.");
-    const response = await fetch(apiOrigin + "/services/data/v" + version.toFixed(1) + "/chatter/users/me", { credentials: "include" });
-    const user = await response.json().catch(() => ({}));
-    if (!response.ok || !(user.id || user.Id) || !(user.username || user.Username)) {
-      throw new Error("Could not identify the signed-in Salesforce user. Open an authenticated Lightning org tab.");
-    }
-    return {
-      id: user.id || user.Id, name: user.name || user.Name || "",
-      username: user.username || user.Username, email: user.email || user.Email || ""
-    };
-  });
+  if (!response?.ok) throw new Error(response?.error || "Salesforce request failed in the extension service worker.");
+  return response.data;
 }
 async function api(path, body) {
   const response = await fetch(BRIDGE + path, {
@@ -78,12 +56,12 @@ async function connectOrg() {
     const { tab, url } = await getSalesforceTab();
     activeTab = tab;
     orgLabel.textContent = url.hostname;
-    const user = await getCurrentUser();
+    const user = await salesforceApi("getCurrentUser", tab.id);
     const browser = /Edg\//.test(navigator.userAgent) ? "edge" : "chrome";
     const result = await api("/api/connect", {
       code: pairingInput.value.trim(), browser, profileName: "Current browser profile",
       tabId: tab.id, orgUrl: url.origin, orgName: url.hostname,
-      environment: /sandbox|test\.salesforce\.com/i.test(url.hostname) ? "Sandbox" : "Production", user
+      environment: /sandbox/i.test(url.hostname) ? "Sandbox" : "Production", user
     });
     connected = { connectionId: result.connectionId, token: result.token, tabId: tab.id, orgOrigin: url.origin, browser };
     const saved = await chrome.storage.local.get("loginDeckConnections");
@@ -104,7 +82,7 @@ async function heartbeat() {
   if (!connected || busy) return;
   try {
     activeTab = await chrome.tabs.get(connected.tabId);
-    const user = await getCurrentUser();
+    const user = await salesforceApi("getCurrentUser", connected.tabId);
     await api("/api/heartbeat", { ...connected, user });
     setConnectionStatus("Connected · " + user.username);
   } catch (error) {
@@ -112,23 +90,8 @@ async function heartbeat() {
   }
 }
 async function searchUsers(term) {
-  return runInSalesforce(async query => {
-    const escaped = query.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-    const apiOrigin = location.hostname.endsWith(".lightning.force.com")
-      ? location.origin.replace(".lightning.force.com", ".my.salesforce.com")
-      : location.origin;
-    const versionsResponse = await fetch(apiOrigin + "/services/data/", { credentials: "include" });
-    if (!versionsResponse.ok) throw new Error("Could not read Salesforce API versions. Check your session and API access.");
-    const versions = await versionsResponse.json();
-    const version = versions.map(item => Number(item.version)).filter(Number.isFinite).sort((a, b) => b - a)[0];
-    if (!version) throw new Error("No Salesforce REST API version is available.");
-    const soql = "SELECT Id, Name, Username, Email, IsActive FROM User WHERE Name LIKE '%" + escaped +
-      "%' OR Username LIKE '%" + escaped + "%' OR Email LIKE '%" + escaped + "%' ORDER BY Name LIMIT 30";
-    const response = await fetch(apiOrigin + "/services/data/v" + version.toFixed(1) + "/query/?q=" + encodeURIComponent(soql), { credentials: "include" });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload?.[0]?.message || payload?.message || "Salesforce rejected the user search.");
-    return payload.records || [];
-  }, [term]);
+  if (!activeTab?.id) throw new Error("No Salesforce tab is selected.");
+  return salesforceApi("searchUsers", activeTab.id, term);
 }
 async function openUserInSetup(userId) {
   const { url } = await getSalesforceTab();
@@ -152,7 +115,7 @@ function renderUsers(users) {
     const active = document.createElement("span"); active.className = "pill" + (user.IsActive ? "" : " inactive");
     active.textContent = user.IsActive ? "Active" : "Inactive"; top.append(info, active);
     const open = document.createElement("button"); open.type = "button"; open.textContent = "Open Login As in Setup ↗";
-    open.addEventListener("click", () => openUserInSetup(user.Id));
+    open.addEventListener("click", () => openUserInSetup(user.Id).catch(error => setStatus(error.message, true)));
     card.append(top, open); resultsEl.append(card);
   }
 }
