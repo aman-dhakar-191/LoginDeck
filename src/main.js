@@ -415,16 +415,6 @@ ipcMain.handle("salesforce:searchUsers", async (_event, { sessionId, term }) => 
   if (String(sessionId).startsWith("bridge:")) {
     const connection = bridgeConnections.get(String(sessionId).slice(7));
     if (!connection || Date.now() - connection.lastSeen > 120000) throw new Error("Browser extension is disconnected. Reconnect it first.");
-    return dispatchBridgeCommand(connection, "searchUsers", { term: query });
-  }
-  if (String(sessionId).startsWith("bridge:")) {
-    const connection = bridgeConnections.get(String(sessionId).slice(7));
-    if (!connection || Date.now() - connection.lastSeen > 120000) throw new Error("Browser extension is disconnected. Reconnect it first.");
-    return dispatchBridgeCommand(connection, "searchUsers", { term: query });
-  }
-  if (String(sessionId).startsWith("bridge:")) {
-    const connection = bridgeConnections.get(String(sessionId).slice(7));
-    if (!connection || Date.now() - connection.lastSeen > 120000) throw new Error("Browser extension is disconnected. Reconnect it first.");
     return sendBridgeCommand(connection, "searchUsers", { term: query });
   }
   const session = (await readSavedSessions()).find(item => item.id === sessionId);
@@ -454,16 +444,6 @@ ipcMain.handle("salesforce:openLoginAs", async (_event, { sessionId, userId }) =
   if (!String(sessionId || "").startsWith("bridge:") && !validId(sessionId)) throw new Error("Choose a valid Salesforce admin session.");
   if (typeof userId !== "string" || !/^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/.test(userId)) {
     throw new Error("Invalid Salesforce user ID.");
-  }
-  if (String(sessionId).startsWith("bridge:")) {
-    const connection = bridgeConnections.get(String(sessionId).slice(7));
-    if (!connection || Date.now() - connection.lastSeen > 120000) throw new Error("Browser extension is disconnected. Reconnect it first.");
-    return dispatchBridgeCommand(connection, "openLoginAs", { userId });
-  }
-  if (String(sessionId).startsWith("bridge:")) {
-    const connection = bridgeConnections.get(String(sessionId).slice(7));
-    if (!connection || Date.now() - connection.lastSeen > 120000) throw new Error("Browser extension is disconnected. Reconnect it first.");
-    return dispatchBridgeCommand(connection, "openLoginAs", { userId });
   }
   if (String(sessionId).startsWith("bridge:")) {
     const connection = bridgeConnections.get(String(sessionId).slice(7));
