@@ -241,10 +241,15 @@ ipcMain.handle("salesforce:searchUsers", async (_event, { sessionId, term }) => 
   if (!String(sessionId || "").startsWith("bridge:") && !validId(sessionId)) throw new Error("Choose a valid Salesforce admin session.");
   const query = String(term || "").trim().slice(0, 100);
   if (query.length < 2) throw new Error("Enter at least 2 characters.");
+  if (String(sessionId).startsWith("bridge:")) {
+    const connection = bridgeConnections.get(String(sessionId).slice(7));
+    if (!connection || Date.now() - connection.lastSeen > 120000) throw new Error("Browser extension is disconnected. Reconnect it first.");
+    return dispatchBridgeCommand(connection, "searchUsers", { term: query });
+  }
   const session = (await readSavedSessions()).find(item => item.id === sessionId);
   if (!session) throw new Error("Saved admin session not found.");
   if (session.profileMode === "personal") {
-    throw new Error("User search currently requires an active LoginDeck isolated session. Open the admin session in an isolated profile first.");
+    throw new Error("Connect this Personal browser profile using the LoginDeck extension first.");
   }
   const active = activeSessions.get(sessionId);
   if (!active) throw new Error("Open this admin session first, sign in to Salesforce, then search again.");
@@ -269,9 +274,14 @@ ipcMain.handle("salesforce:openLoginAs", async (_event, { sessionId, userId }) =
   if (typeof userId !== "string" || !/^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/.test(userId)) {
     throw new Error("Invalid Salesforce user ID.");
   }
+  if (String(sessionId).startsWith("bridge:")) {
+    const connection = bridgeConnections.get(String(sessionId).slice(7));
+    if (!connection || Date.now() - connection.lastSeen > 120000) throw new Error("Browser extension is disconnected. Reconnect it first.");
+    return dispatchBridgeCommand(connection, "openLoginAs", { userId });
+  }
   const session = (await readSavedSessions()).find(item => item.id === sessionId);
   if (!session || session.profileMode === "personal") {
-    throw new Error("Select a LoginDeck isolated admin session.");
+    throw new Error("Select a connected browser or LoginDeck isolated admin session.");
   }
   const active = activeSessions.get(sessionId);
   if (!active) throw new Error("Open and sign in to the selected admin session first.");
