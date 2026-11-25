@@ -176,6 +176,7 @@ async function pollCommands() {
   if (!connected || busy) return;
   busy = true;
   try {
+    activeTab = await chrome.tabs.get(connected.tabId);
     const data = await api("/api/next?connectionId=" + encodeURIComponent(connected.connectionId) +
       "&token=" + encodeURIComponent(connected.token));
     if (data.command) await executeCommand(data.command);

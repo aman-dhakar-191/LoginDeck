@@ -6,10 +6,10 @@ LoginDeck is a Windows desktop session manager plus a companion Salesforce brows
 
 LoginDeck supports two browser profile modes:
 
-- **Personal Edge profile** opens Salesforce through the Windows Microsoft Edge protocol handler. Edge uses its normal profile selection and handles existing sign-ins, cookies and saved passwords. LoginDeck does not read, export, copy or store browser credentials. The Edge profile that opens is controlled by Edge/Windows (typically the default or last-used Edge profile).
+- **Personal browser profile** opens Salesforce in the selected installed browser's existing profile. LoginDeck does not read, export, copy or store browser credentials. Use the companion extension to connect that authenticated org to the desktop app.
 - **LoginDeck isolated profile** launches Chrome or Edge with a dedicated user-data directory for that saved session. Cookies and site storage are separate for each LoginDeck session; sign in once in each isolated profile.
 
-Personal Edge mode is currently Windows-only and supports Microsoft Edge. It opens a tab/window in Edge but does not give LoginDeck control over that personal browser window. Deleting a Personal Edge session removes only its LoginDeck shortcut/configuration; it does not touch Edge data. Existing sessions without a `profileMode` setting continue to launch as isolated profiles.
+The browser extension is the supported way to connect existing Edge and Chrome profiles to LoginDeck's admin-session selector. Existing sessions without a `profileMode` setting continue to launch as isolated profiles.
 
 Download the Windows installer from the GitHub Releases page.
 
@@ -30,7 +30,7 @@ The extension uses the signed-in Salesforce tab's REST API to identify the curre
 
 ## Browser bridge behaviour and limits
 
-- Connections are held in the desktop app's memory and are cleared when LoginDeck exits. After restarting LoginDeck, reconnect each org using the new pairing code. Reconnect after a browser restart if the original tab ID changes.
+- Connections are held in the desktop app's memory and are cleared when LoginDeck exits. After restarting LoginDeck, reconnect each org using the new pairing code. Reconnect after a browser restart if the original tab ID changes. Reconnect after a browser restart if the original tab ID changes.
 - Each connection is tied to the browser tab and Salesforce org that were paired. Keep that original org tab open; closing it makes the connection go offline.
 - The extension's background service worker sends a heartbeat every 30 seconds. The side panel polls more frequently while open.
 - The bridge listens only on loopback (127.0.0.1); it is not exposed to the local network.
